@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A fancy Hello, World! page." />
+    <title>Hello, World!</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        display: grid;
+        min-height: 100vh;
+        margin: 0;
+        place-items: center;
+        overflow: hidden;
+        color: #f7f7ff;
+        background:
+          radial-gradient(circle at 15% 20%, rgba(128, 77, 255, .55), transparent 28rem),
+          radial-gradient(circle at 85% 75%, rgba(20, 210, 255, .4), transparent 26rem),
+          #090b1a;
+      }
+
+      .orb {
+        position: fixed;
+        width: 18rem;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ff8dd8, #8c68ff);
+        filter: blur(2px);
+        opacity: .22;
+        animation: drift 12s ease-in-out infinite alternate;
+      }
+
+      .orb--one { top: -8rem; right: -5rem; }
+      .orb--two { bottom: -10rem; left: -5rem; animation-delay: -5s; }
+
+      main {
+        width: min(90%, 46rem);
+        padding: clamp(2rem, 7vw, 5rem);
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, .18);
+        border-radius: 2rem;
+        background: rgba(16, 18, 47, .58);
+        box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, .36);
+        backdrop-filter: blur(18px);
+        animation: appear .8s cubic-bezier(.2, .8, .2, 1) both;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        gap: .5rem;
+        align-items: center;
+        margin: 0 0 1.25rem;
+        color: #c8c7ff;
+        font-size: .8rem;
+        font-weight: 700;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        width: .55rem;
+        height: .55rem;
+        border-radius: 50%;
+        background: #6ef3c5;
+        box-shadow: 0 0 1rem #6ef3c5;
+        content: "";
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(3.2rem, 12vw, 7rem);
+        line-height: .95;
+        letter-spacing: -.075em;
+        background: linear-gradient(115deg, #ffffff 24%, #c9baff 56%, #75e8ff);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      p {
+        max-width: 32rem;
+        margin: 1.75rem auto 0;
+        color: #c6c9df;
+        font-size: clamp(1rem, 2vw, 1.2rem);
+        line-height: 1.7;
+      }
+
+      .button {
+        display: inline-block;
+        margin-top: 2rem;
+        padding: .85rem 1.2rem;
+        border-radius: 999px;
+        color: #11122a;
+        background: #fff;
+        box-shadow: 0 .65rem 1.8rem rgba(139, 112, 255, .35);
+        font-weight: 750;
+        text-decoration: none;
+        transition: transform .2s ease, box-shadow .2s ease;
+      }
+
+      .button:hover { transform: translateY(-3px); box-shadow: 0 1rem 2.4rem rgba(105, 221, 255, .4); }
+      .button:focus-visible { outline: 3px solid #75e8ff; outline-offset: 4px; }
+
+      @keyframes appear {
+        from { opacity: 0; transform: translateY(1.25rem) scale(.97); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes drift {
+        to { transform: translate(3rem, 2rem) rotate(25deg); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="orb orb--one" aria-hidden="true"></div>
+    <div class="orb orb--two" aria-hidden="true"></div>
+    <main>
+      <div class="eyebrow">A fresh start</div>
+      <h1>Hello, World!</h1>
+      <p>Your beautifully simple corner of the web is ready. Now make something remarkable.</p>
+      <a class="button" href="#hello">Begin the journey →</a>
+    </main>
+  </body>
+</html>
