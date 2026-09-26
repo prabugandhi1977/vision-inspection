@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07111d" />
+    <title>VisionForge | Station 01</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#dashboard" aria-label="VisionForge dashboard">
+          <span class="brand-mark"><i></i><i></i><i></i></span>
+          <span>VISION<span>FORGE</span></span>
+        </a>
+
+        <nav class="nav-list">
+          <a class="nav-item active" href="#dashboard" data-view="Dashboard"><span class="nav-icon">⌘</span>Dashboard</a>
+          <a class="nav-item" href="#inspection" data-view="Live inspection"><span class="nav-icon">◉</span>Live inspection</a>
+          <a class="nav-item" href="#results" data-view="Results"><span class="nav-icon">▦</span>Results <em>12</em></a>
+          <a class="nav-item" href="#recipes" data-view="Recipes"><span class="nav-icon">◫</span>Recipes</a>
+          <a class="nav-item" href="#analytics" data-view="Analytics"><span class="nav-icon">⌁</span>Analytics</a>
+          <a class="nav-item" href="#alarms" data-view="Alarms"><span class="nav-icon">△</span>Alarms</a>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="station-card">
+            <span class="eyebrow">ACTIVE STATION</span>
+            <strong>Station 01 <b>●</b></strong>
+            <small>LINE A · CELL 04</small>
+          </div>
+          <button class="operator" type="button" id="profileButton">
+            <span class="avatar">SM</span>
+            <span><strong>Sakthi M.</strong><small>Production operator</small></span>
+            <b>···</b>
+          </button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">PRODUCTION / LINE A</p>
+            <h1>Good morning, Sakthi <span>⌄</span></h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="shift"><i></i> SHIFT 1 <b>06:00–14:00</b></span>
+            <button class="icon-button" type="button" id="notifications" aria-label="Notifications">♢<sup>2</sup></button>
+            <button class="help-button" type="button" id="helpButton">?</button>
+          </div>
+        </header>
+
+        <section class="status-strip" aria-label="Current production state">
+          <div class="running-status"><span class="pulse"></span><strong>RUNNING</strong><span>Component_A</span><b>Recipe v1.2</b></div>
+          <div class="connection-status"><span><i class="connected"></i> Camera <b>Connected</b></span><span><i class="connected"></i> PLC <b>Connected</b></span><span><i class="machine"></i> Machine <b>Auto</b></span></div>
+          <button class="stop-button" type="button" id="runControl"><span>Ⅱ</span> Pause line</button>
+        </section>
+
+        <section class="metrics" aria-label="Today at a glance">
+          <article class="metric-card total"><div><span class="metric-label">TODAY'S OUTPUT</span><strong id="totalCount">12,450</strong><small><b>+8.2%</b> vs. last shift</small></div><span class="metric-icon">◒</span></article>
+          <article class="metric-card pass"><div><span class="metric-label">PASS RATE</span><strong id="passRate">98.07<sup>%</sup></strong><small><b>↑ 0.4%</b> within target</small></div><span class="metric-icon">✓</span></article>
+          <article class="metric-card fail"><div><span class="metric-label">REJECTED</span><strong id="failCount">240</strong><small><b>1.93%</b> of inspected parts</small></div><span class="metric-icon">×</span></article>
+          <article class="metric-card cycle"><div><span class="metric-label">AVG. CYCLE TIME</span><strong id="cycleTime">1.42<sup>s</sup></strong><small><b>Target 1.50s</b> <span class="target-ok">●</span></small></div><span class="metric-icon">◷</span></article>
+        </section>
+
+        <section class="work-grid">
+          <article class="live-card card" id="inspection">
+            <div class="card-heading">
+              <div><span class="eyebrow">LIVE INSPECTION</span><h2>Current part <span class="live-dot">● LIVE</span></h2></div>
+              <button class="more-button" type="button" aria-label="More live inspection options">•••</button>
+            </div>
+            <div class="camera-frame" aria-label="Simulated camera view of current component">
+              <div class="camera-tag">CAM 01 <span>●</span></div>
+              <div class="scanline"></div>
+              <div class="inspection-art" aria-hidden="true">
+                <svg viewBox="0 0 760 330" role="img">
+                  <defs>
+                    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#cbd4d8"/><stop offset=".46" stop-color="#768892"/><stop offset="1" stop-color="#33434d"/></linearGradient>
+                    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#e2eaec"/><stop offset="1" stop-color="#5c6b74"/></linearGradient>
+                    <filter id="shadow"><feGaussianBlur stdDeviation="9"/></filter>
+                  </defs>
+                  <ellipse cx="380" cy="258" rx="277" ry="32" fill="#041019" opacity=".65" filter="url(#shadow)"/>
+                  <path d="M108 106h138l38-40h195l34 40h139c28 0 47 19 47 42v72c0 25-20 45-45 45H106c-26 0-46-20-46-45v-69c0-25 20-45 48-45Z" fill="url(#plate)" stroke="#d7e0e1" stroke-width="3"/>
+                  <path d="M130 121h120l35-34h190l33 34h122" fill="none" stroke="#f0f5f3" opacity=".5" stroke-width="3"/>
+                  <rect x="311" y="105" width="137" height="122" rx="10" fill="#192c35" stroke="#d0e4df" stroke-width="5"/>
+                  <rect x="326" y="120" width="107" height="92" rx="5" fill="#61757a"/>
+                  <circle cx="205" cy="186" r="37" fill="url(#rim)" stroke="#23343e" stroke-width="7"/>
+                  <circle cx="205" cy="186" r="20" fill="#15262e"/>
+                  <circle cx="552" cy="186" r="37" fill="url(#rim)" stroke="#23343e" stroke-width="7"/>
+                  <circle cx="552" cy="186" r="20" fill="#15262e"/>
+                  <circle cx="278" cy="222" r="11" fill="#172a33"/><circle cx="480" cy="222" r="11" fill="#172a33"/>
+                  <path d="M92 190h78M590 190h78" stroke="#4ae0bd" stroke-width="2" stroke-dasharray="4 7" opacity=".8"/>
+                </svg>
+              </div>
+              <div class="roi roi-a"><span>01</span><small>HOLE Ø</small></div>
+              <div class="roi roi-b"><span>02</span><small>ORIENTATION</small></div>
+              <div class="roi roi-c"><span>03</span><small>LABEL</small></div>
+              <div class="camera-bottom"><span>EXP 4.2 ms</span><span>GAIN 1.0x</span><span>1920 × 1200</span></div>
+            </div>
+            <div class="inspection-footer">
+              <div><span>PART ID</span><strong id="partId">A001248</strong></div>
+              <div><span>ELAPSED TIME</span><strong id="elapsedTime">0.84 sec</strong></div>
+              <div class="result-indicator"><span>PRELIMINARY RESULT</span><strong><i></i> PASS</strong></div>
+              <button type="button" id="simulateButton">Simulate part <span>→</span></button>
+            </div>
+          </article>
+
+          <aside class="result-card card">
+            <div class="card-heading"><div><span class="eyebrow">LAST INSPECTION</span><h2>Result detail</h2></div><span class="pass-pill">PASS</span></div>
+            <div class="last-part"><span class="part-icon">▣</span><div><strong>A001247</strong><small>10:32:18 · Component_A</small></div><b>1.39s</b></div>
+            <div class="checks">
+              <div class="check"><span class="check-number">01</span><div><strong>Part presence</strong><small>Feature detected</small></div><b>PASS</b><i>✓</i></div>
+              <div class="check"><span class="check-number">02</span><div><strong>Hole diameter</strong><small>10.06 mm <em>± 0.10 mm</em></small></div><b>PASS</b><i>✓</i></div>
+              <div class="check"><span class="check-number">03</span><div><strong>Orientation</strong><small>0.2° <em>max. 2.0°</em></small></div><b>PASS</b><i>✓</i></div>
+              <div class="check"><span class="check-number">04</span><div><strong>Surface finish</strong><small>No anomaly detected</small></div><b>PASS</b><i>✓</i></div>
+            </div>
+            <button class="view-detail" type="button" id="detailsButton">View inspection details <span>→</span></button>
+          </aside>
+        </section>
+
+        <section class="lower-grid">
+          <article class="recent-card card" id="results">
+            <div class="card-heading"><div><span class="eyebrow">TRACEABILITY</span><h2>Recent results</h2></div><button class="text-button" type="button" id="allResults">View all <span>→</span></button></div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>TIME</th><th>PART ID</th><th>RESULT</th><th>RECIPE</th><th>CYCLE</th><th></th></tr></thead>
+              <tbody id="recentTable">
+                <tr><td>10:32:18</td><td><strong>A001247</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.39s</td><td><button aria-label="View part A001247">›</button></td></tr>
+                <tr><td>10:32:17</td><td><strong>A001246</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.43s</td><td><button aria-label="View part A001246">›</button></td></tr>
+                <tr><td>10:32:15</td><td><strong>A001245</strong></td><td><span class="result-chip fail-chip">● FAIL</span></td><td>v1.2</td><td>1.49s</td><td><button aria-label="View part A001245">›</button></td></tr>
+                <tr><td>10:32:14</td><td><strong>A001244</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.40s</td><td><button aria-label="View part A001244">›</button></td></tr>
+              </tbody>
+            </table></div>
+          </article>
+
+          <article class="defect-card card" id="analytics">
+            <div class="card-heading"><div><span class="eyebrow">QUALITY INSIGHT</span><h2>Defect distribution</h2></div><button class="period-button" type="button" id="periodButton">This shift <span>⌄</span></button></div>
+            <div class="defect-total"><strong>240</strong><span>rejects this shift<br/><b>1.93% of output</b></span></div>
+            <div class="defect-bars">
+              <div><span>Surface defect <b>102</b></span><i><em style="width: 72%"></em></i></div>
+              <div><span>Hole diameter <b>68</b></span><i><em style="width: 49%"></em></i></div>
+              <div><span>Orientation <b>43</b></span><i><em style="width: 31%"></em></i></div>
+              <div><span>Label / OCR <b>27</b></span><i><em style="width: 20%"></em></i></div>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
