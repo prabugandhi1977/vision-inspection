@@ -215,3 +215,5 @@ button { cursor: pointer; }
 .people li.empty { color:#8a9aa0; font-weight:400; border-style:dashed; }
 .enroll-row { display:flex; gap:8px; }
 .enroll-row input { flex:1; min-width:0; }
+.step-remove { background:transparent; border:0; border-left:1px solid #edf0ef; color:#b0bdc1; font-size:16px; line-height:1; padding:0 11px; }
+.step-remove:hover:not(:disabled) { background:#fdf0ef; color:#c9564d; }

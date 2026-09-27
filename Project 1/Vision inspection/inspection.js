@@ -277,6 +277,7 @@ function colorName(r, g, b) {
 /* ---------- Face recognition (loaded on first use) ---------- */
 
 let faceApiReady = null;
+let faceBackendChecked = false;
 function loadFaceApi() {
   if (!faceApiReady) {
     showToast('Loading face recognition models (about 7 MB, first use only)…');
@@ -305,10 +306,21 @@ async function detectFaces(acquired, rect) {
   crop.width = rect.w * HIRES_SCALE;
   crop.height = rect.h * HIRES_SCALE;
   crop.getContext('2d').drawImage(acquired.hires(), rect.x * HIRES_SCALE, rect.y * HIRES_SCALE, crop.width, crop.height, 0, 0, crop.width, crop.height);
-  const faces = await faceapi
+  const detect = () => faceapi
     .detectAllFaces(crop, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
     .withFaceLandmarks(true)
     .withFaceDescriptors();
+  let faces = await detect();
+  // Some GPU/driver combinations make the WebGL backend return no detections at all.
+  // The first time WebGL finds nothing, cross-check once on the CPU and keep whichever works.
+  if (!faces.length && !faceBackendChecked && faceapi.tf.getBackend() === 'webgl') {
+    faceBackendChecked = true;
+    await faceapi.tf.setBackend('cpu');
+    await faceapi.tf.ready();
+    faces = await detect();
+    if (faces.length) showToast('Face detection switched to CPU mode for this graphics driver (slower but reliable).');
+    else { await faceapi.tf.setBackend('webgl'); await faceapi.tf.ready(); }
+  }
   return faces.map((f) => {
     const box = f.detection.box;
     return {
@@ -683,7 +695,16 @@ function showOverall(overall, results, cycle, source, record) {
   row.innerHTML = `<td>${clock()}</td><td><strong>${id}</strong></td><td><span class="result-chip ${chip}">● ${overall}</span></td><td>${version}</td><td>${cycle.toFixed(2)}s</td><td><button aria-label="View part ${id}">›</button></td>`;
   els.table.prepend(row);
   if (els.table.children.length > 4) els.table.lastElementChild.remove();
-  showToast(`${id}: ${overall} · ${Object.values(results).filter((r) => r.status === 'PASS').length}/${pgm.program.steps.length} steps passed`, overall === 'PASS' ? '' : 'error');
+  const enabledSteps = pgm.program.steps.filter((step) => step.enabled);
+  const passed = enabledSteps.filter((step) => results[step.id]?.status === 'PASS').length;
+  // Name the first failing steps so the operator can see why without opening the details.
+  const problems = enabledSteps
+    .filter((step) => results[step.id] && ['FAIL', 'ERROR'].includes(results[step.id].status))
+    .slice(0, 2)
+    .map((step) => `${step.name}: ${resultLabel(step, results[step.id])}`);
+  const skipped = enabledSteps.filter((step) => results[step.id]?.status === 'SKIPPED').length;
+  const why = problems.length ? ` · ${problems.join(' · ')}${skipped ? ` · ${skipped} skipped` : ''}` : '';
+  showToast(`${id}: ${overall} · ${passed}/${enabledSteps.length} steps passed${why}`, overall === 'PASS' ? '' : 'error');
 }
 
 /* ---------- Rendering ---------- */
@@ -703,7 +724,7 @@ function renderHeader() {
   // Static controls follow the role both ways; re-rendered controls only need locking.
   [pe.pxPerMm, pe.reason, pe.save, pe.revert].forEach((control) => { control.disabled = locked; });
   if (locked) {
-    pe.card.querySelectorAll('.tool-library button, .step-order button, .step-editor input, .step-editor select, .step-editor button[data-edit]')
+    pe.card.querySelectorAll('.tool-library button, .step-order button, .step-remove, .step-editor input, .step-editor select, .step-editor button[data-edit]')
       .forEach((control) => { control.disabled = true; });
   }
 }
@@ -740,6 +761,7 @@ function renderStepList() {
         <button type="button" data-move="-1" data-id="${step.id}" aria-label="Move ${escapeHtml(step.name)} up" ${index === 0 ? 'disabled' : ''}>▲</button>
         <button type="button" data-move="1" data-id="${step.id}" aria-label="Move ${escapeHtml(step.name)} down" ${index === steps.length - 1 ? 'disabled' : ''}>▼</button>
       </span>
+      <button type="button" class="step-remove" data-remove="${step.id}" aria-label="Remove ${escapeHtml(step.name)}" title="Remove step">×</button>
     </li>`;
   }).join('') || '<li class="empty">No steps yet. Add a tool from the library.</li>';
   renderHeader();
@@ -1078,7 +1100,21 @@ pe.library.addEventListener('click', (event) => {
   if (tile && canEdit()) addStep(tile.dataset.tool);
 });
 
+function removeStep(id) {
+  const index = pgm.program.steps.findIndex((s) => s.id === id);
+  const [removed] = pgm.program.steps.splice(index, 1);
+  if (pgm.selectedId === id) pgm.selectedId = (pgm.program.steps[index] || pgm.program.steps[index - 1])?.id ?? null;
+  markDirty();
+  renderEditor();
+  showToast(`“${removed.name}” removed. Save a new version to keep this change, or Discard changes to undo.`);
+}
+
 pe.stepList.addEventListener('click', (event) => {
+  const remove = event.target.closest('[data-remove]');
+  if (remove) {
+    if (canEdit()) removeStep(remove.dataset.remove);
+    return;
+  }
   const move = event.target.closest('[data-move]');
   if (move) {
     if (!canEdit()) return;
@@ -1141,13 +1177,7 @@ pe.editor.addEventListener('click', (event) => {
     markDirty();
     renderEditor();
   }
-  if (action === 'delete') {
-    pgm.program.steps = pgm.program.steps.filter((s) => s.id !== step.id);
-    pgm.selectedId = pgm.program.steps[0]?.id ?? null;
-    markDirty();
-    renderEditor();
-    showToast(`“${step.name}” removed. Save a new version to apply it.`);
-  }
+  if (action === 'delete') removeStep(step.id);
 });
 
 pe.pxPerMm.addEventListener('change', () => {
