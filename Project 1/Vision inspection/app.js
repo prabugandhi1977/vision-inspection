@@ -32,9 +32,10 @@ const els = {
   cameraSetupPreview: document.querySelector('#cameraSetupPreview'),
   capture: document.querySelector('#captureButton'),
   mirror: document.querySelector('#mirrorToggle'),
+  cameraFacing: document.querySelector('#cameraFacing'),
 };
 
-let state = { running: true, total: 12450, fails: 240, part: 1248, cameraStream: null, mirror: true };
+let state = { running: true, total: 12450, fails: 240, part: 1248, cameraStream: null, mirror: true, gateway: null };
 
 try { state.mirror = localStorage.getItem('visionforge.mirror') !== 'false'; } catch { /* keep default */ }
 
@@ -91,11 +92,11 @@ function addPart() {
   showToast(`${id}: ${result} · inspection recorded`, isPass ? '' : 'error');
 }
 
-function setCameraState({ connected, label = 'SIMULATED', format = '1920 × 1200', detail = 'AWAITING CAMERA' }) {
+function setCameraState({ connected, label = 'SIMULATED', format = '1920 × 1200', detail = 'AWAITING CAMERA', source = 'WEB CAMERA' }) {
   els.cameraFrame.classList.toggle('has-webcam', connected);
   els.cameraStatus.textContent = label;
   els.cameraIndicator.style.color = connected ? '#45d2af' : '#94a8af';
-  els.cameraSource.textContent = connected ? 'WEB CAMERA' : 'SIMULATION';
+  els.cameraSource.textContent = connected ? source : 'SIMULATION';
   els.cameraFormat.textContent = format;
   els.cameraMode.textContent = detail;
   els.cameraConnectionState.textContent = connected ? 'Connected' : 'Not connected';
@@ -103,6 +104,7 @@ function setCameraState({ connected, label = 'SIMULATED', format = '1920 × 1200
 }
 
 function stopCamera() {
+  if (typeof stopGateway === 'function') stopGateway();
   state.cameraStream?.getTracks().forEach((track) => track.stop());
   state.cameraStream = null;
   els.webcam.srcObject = null;
@@ -152,9 +154,11 @@ function describeCameraError(error) {
   };
 }
 
-async function requestCameraStream(deviceId) {
+// `facing` ('environment' = rear, 'user' = front) picks the lens on phones and tablets.
+async function requestCameraStream(deviceId, facing) {
   const video = { width: { ideal: 1280 }, height: { ideal: 720 } };
-  if (deviceId) video.deviceId = { exact: deviceId };
+  if (facing) video.facingMode = { ideal: facing };
+  else if (deviceId) video.deviceId = { exact: deviceId };
   return navigator.mediaDevices.getUserMedia({ audio: false, video });
 }
 
@@ -206,7 +210,9 @@ async function connectCamera() {
   resetCameraHelp();
   try {
     const selectedId = els.cameraSelect.value;
-    const stream = await requestCameraStream(selectedId);
+    const facing = els.cameraFacing.value;
+    const stream = await requestCameraStream(selectedId, facing);
+    if (typeof stopGateway === 'function') stopGateway();
     state.cameraStream?.getTracks().forEach((track) => track.stop());
     state.cameraStream = stream;
     els.webcam.srcObject = stream;
@@ -218,7 +224,10 @@ async function connectCamera() {
     const device = (await navigator.mediaDevices.enumerateDevices()).find((item) => item.deviceId === settings.deviceId);
     const label = (device?.label || 'WEB CAMERA').replace(/^.*?\s/, '').toUpperCase().slice(0, 18) || 'WEB CAMERA';
     els.capturedFrame.hidden = true;
-    setCameraState({ connected: true, label, format, detail: 'LIVE PREVIEW' });
+    // A rear camera looks away from the user, so mirroring would reverse the part.
+    const rear = facing === 'environment' || settings.facingMode === 'environment';
+    if (rear && state.mirror) { state.mirror = false; applyMirror(); }
+    setCameraState({ connected: true, label: rear ? 'REAR CAMERA' : label, format, detail: 'LIVE PREVIEW', source: rear ? 'PHONE CAMERA' : 'WEB CAMERA' });
     els.cameraPreview.classList.add('has-preview');
     await refreshCameraList();
     if (await isStreamBlack(els.webcam)) {
@@ -243,6 +252,19 @@ async function connectCamera() {
 }
 
 function captureFrame() {
+  if (state.gateway?.image) {
+    const image = state.gateway.image;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    canvas.getContext('2d').drawImage(image, 0, 0);
+    els.capturedFrame.src = canvas.toDataURL('image/png');
+    els.capturedFrame.hidden = false;
+    els.cameraStatus.textContent = 'FRAME CAPTURED';
+    els.cameraMode.textContent = 'READY TO INSPECT';
+    showToast('Frame captured from the smart camera. Inspections use it until you reconnect.');
+    return;
+  }
   if (!state.cameraStream || !els.webcam.videoWidth) {
     showToast('Connect a web camera before capturing an inspection image.', 'error');
     return;
@@ -279,9 +301,9 @@ els.simulate.addEventListener('click', addPart);
 els.openCamera.addEventListener('click', openCameraDialog);
 els.closeCamera.addEventListener('click', () => { els.cameraDialog.hidden = true; });
 els.cameraBackdrop.addEventListener('click', () => { els.cameraDialog.hidden = true; });
-els.refreshCameras.addEventListener('click', () => refreshCameraList().catch(() => showToast('Unable to refresh the camera list.', 'error')));
-els.connectCamera.addEventListener('click', connectCamera);
-els.disconnectCamera.addEventListener('click', () => { stopCamera(); showToast('Web camera disconnected. Inspection view returned to simulation.'); });
+els.refreshCameras.addEventListener('click', () => (cameraSourceMode === 'gateway' ? checkGateway() : refreshCameraList().catch(() => showToast('Unable to refresh the camera list.', 'error'))));
+els.connectCamera.addEventListener('click', () => (cameraSourceMode === 'gateway' ? connectGateway() : connectCamera()));
+els.disconnectCamera.addEventListener('click', () => { stopCamera(); showToast('Camera disconnected. Inspection view returned to simulation.'); });
 els.capture.addEventListener('click', captureFrame);
 els.mirror.addEventListener('change', () => {
   state.mirror = els.mirror.checked;

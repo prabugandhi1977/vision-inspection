@@ -77,6 +77,7 @@
             <div class="camera-frame" id="cameraFrame" aria-label="Camera view of current component">
               <div class="camera-tag">CAM 01 <span id="cameraIndicator">●</span><strong id="cameraStatus">SIMULATED</strong></div>
               <video class="webcam-feed" id="webcamFeed" autoplay muted playsinline aria-label="Live web camera preview"></video>
+              <img class="webcam-feed gateway-feed" id="gatewayFeed" alt="Live image from the connected smart camera" hidden />
               <img class="captured-frame" id="capturedFrame" alt="Captured inspection frame" hidden />
               <div class="scanline"></div>
               <div class="inspection-art" aria-hidden="true">
@@ -211,14 +212,44 @@
           <div><span class="eyebrow">CAMERA INPUT</span><h2 id="cameraDialogTitle">Configure web camera</h2></div>
           <button class="dialog-close" type="button" id="closeCameraButton" aria-label="Close camera configuration">×</button>
         </header>
-        <p class="dialog-copy">Choose the camera used to acquire the inspection image. Camera access is requested only after you select <strong>Connect camera</strong>.</p>
-        <label for="cameraSelect">AVAILABLE CAMERA</label>
-        <select id="cameraSelect" aria-describedby="cameraHelp"><option value="">Default web camera</option></select>
-        <p class="camera-help" id="cameraHelp">For a stable production setup, use a dedicated USB/industrial camera and lock its focus, lighting, and physical position.</p>
-        <label class="mirror-toggle"><input type="checkbox" id="mirrorToggle" checked /> Mirror image <small>(selfie view: moves the same way you do)</small></label>
+        <div class="source-switch" role="group" aria-label="Camera source">
+          <button type="button" data-camera-source="device" aria-pressed="true"><strong>This device</strong><small>Webcam · phone camera · phone-webcam apps</small></button>
+          <button type="button" data-camera-source="gateway" aria-pressed="false"><strong>Smart / IP camera</strong><small>Cognex · Hikvision · RTSP · FTP images</small></button>
+        </div>
+        <div id="deviceSource">
+          <label for="cameraSelect">AVAILABLE CAMERA</label>
+          <select id="cameraSelect" aria-describedby="cameraHelp"><option value="">Default web camera</option></select>
+          <label for="cameraFacing">LENS · PHONES AND TABLETS</label>
+          <select id="cameraFacing">
+            <option value="">Use the camera selected above</option>
+            <option value="environment">Rear camera (inspect parts)</option>
+            <option value="user">Front camera</option>
+          </select>
+          <p class="camera-help" id="cameraHelp">On a phone, open this page and choose the rear camera. To use a phone as this PC's camera, install a phone-webcam app (DroidCam, Iriun) and select it above.</p>
+          <label class="mirror-toggle"><input type="checkbox" id="mirrorToggle" checked /> Mirror image <small>(selfie view: moves the same way you do)</small></label>
+        </div>
+        <div id="gatewaySource" hidden>
+          <label for="gatewayUrl">CAMERA GATEWAY ADDRESS</label>
+          <div class="gateway-row">
+            <input type="url" id="gatewayUrl" value="http://127.0.0.1:8765" spellcheck="false" />
+            <button class="secondary-button" type="button" id="checkGatewayButton">Check</button>
+          </div>
+          <label for="gatewayCamera">CAMERA</label>
+          <select id="gatewayCamera"><option value="">Check the gateway to list its cameras</option></select>
+          <label class="mirror-toggle"><input type="checkbox" id="gatewayTrigger" checked /> Trigger the camera on each Inspect <small>(Cognex Native Mode)</small></label>
+          <label for="gatewayInterval">LIVE VIEW</label>
+          <select id="gatewayInterval">
+            <option value="0">Off · image only when inspecting</option>
+            <option value="500">Refresh every 0.5 s</option>
+            <option value="1000" selected>Refresh every 1 s</option>
+            <option value="3000">Refresh every 3 s</option>
+          </select>
+          <p class="camera-help" id="gatewayHelp">Smart and IP cameras connect through the VisionForge camera gateway running on this PC (see camera-gateway/README.md).</p>
+        </div>
         <div class="camera-preview" id="cameraPreview">
           <video id="cameraSetupPreview" autoplay muted playsinline aria-label="Live camera setup preview"></video>
-          <p id="cameraPreviewMessage">Live camera preview will appear here after connecting.</p>
+          <img id="gatewayPreview" alt="Smart camera preview" hidden />
+          <p id="cameraPreviewMessage">The camera preview appears here after connecting.</p>
         </div>
         <dl class="camera-readout">
           <div><dt>STATUS</dt><dd id="cameraConnectionState">Not connected</dd></div>
@@ -288,6 +319,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
     <script src="auth.js"></script>
+    <script src="camera-sources.js"></script>
     <script src="inspection.js"></script>
   </body>
 </html>
