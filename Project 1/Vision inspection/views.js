@@ -6,6 +6,7 @@
 
 const VIEW_KEY = 'visionforge.view';
 const THEME_KEY = 'visionforge.theme';
+const SIDEBAR_KEY = 'visionforge.sidebar';
 
 const svg = (body) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${body}</svg>`;
 const TABS = [
@@ -22,7 +23,8 @@ let currentView = 'overview';
 const visibleTabs = () => TABS.filter((tab) => !tab.permission || auth.can(tab.permission));
 
 function renderNav() {
-  nav.innerHTML = visibleTabs().map((tab) => `<button type="button" class="tab-btn${tab.id === currentView ? ' active' : ''}" data-tab="${tab.id}"${tab.id === currentView ? ' aria-current="page"' : ''}><span class="tab-icon">${tab.icon}</span>${tab.label}</button>`).join('');
+  // title gives the name on hover when the menu is collapsed to icons; the label stays for screen readers.
+  nav.innerHTML = visibleTabs().map((tab) => `<button type="button" class="tab-btn${tab.id === currentView ? ' active' : ''}" data-tab="${tab.id}" title="${tab.label}"${tab.id === currentView ? ' aria-current="page"' : ''}><span class="tab-icon">${tab.icon}</span><span class="tab-label">${tab.label}</span></button>`).join('');
 }
 
 function showView(id, { scroll = true } = {}) {
@@ -69,5 +71,18 @@ document.querySelectorAll('.theme-btn').forEach((button) => button.addEventListe
   try { saved = localStorage.getItem(THEME_KEY) || 'system'; } catch { /* default */ }
   applyTheme(saved);
 })();
+
+/* ---------- Collapsible side menu (icons only) ---------- */
+
+const sidebarToggle = document.querySelector('#sidebarToggle');
+function setSidebarCollapsed(collapsed) {
+  document.querySelector('#appShell').classList.toggle('sidebar-collapsed', collapsed);
+  sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+  sidebarToggle.querySelector('.tab-label').textContent = collapsed ? 'Show menu' : 'Hide menu';
+  sidebarToggle.title = collapsed ? 'Show menu' : 'Hide menu';
+  try { localStorage.setItem(SIDEBAR_KEY, collapsed ? 'collapsed' : 'expanded'); } catch { /* session only */ }
+}
+sidebarToggle.addEventListener('click', () => setSidebarCollapsed(!document.querySelector('#appShell').classList.contains('sidebar-collapsed')));
+try { setSidebarCollapsed(localStorage.getItem(SIDEBAR_KEY) === 'collapsed'); } catch { setSidebarCollapsed(false); }
 
 renderNav();
