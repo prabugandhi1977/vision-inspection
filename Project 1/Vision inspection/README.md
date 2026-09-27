@@ -35,7 +35,13 @@ The **Inspection program** section configures what is inspected and how each res
 | Blob count | Connected regions above a minimum area | Cognex Blob · Keyence Blob · Omron Labeling |
 | Edge width | Caliper distance between first and last edge, in mm | Cognex Caliper · Keyence Edge Width · Omron Edge Width |
 | Color match | Similarity to a taught reference colour | Keyence Color Inspection · Omron Color Data |
+| Color identify | Names the dominant colour (Red, Orange, Yellow, Green, Cyan, Blue, Purple, Pink, Brown, White, Grey, Black); can require an expected colour | Keyence Color Area · Omron Color Data |
+| Face ID | Detects faces and names enrolled people (others: *Unknown*); value is match confidence | Deep-learning face recognition (face-api.js) |
 | Surface contrast | Grey-level standard deviation (scratches, stains) | Cognex Contrast · Omron Defect |
+
+**Colour names** appear in the results for *Color match* and *Color identify*.
+
+**Face ID** loads the face-api.js models (about 7 MB) from the jsDelivr CDN on first use, so it needs an internet connection. To enroll a person, place one face inside the step's ROI, enter a name, and select **Enroll face**; 2–3 samples per person improve recognition. Only a 128-number face descriptor is stored (in the recipe, in browser storage), not the image. Obtain consent before enrolling people — face data is biometric personal data in many jurisdictions. Face ID steps default to **Fixed in image**, so they still run when the part locator does not find a part; disable the part-inspection steps when using the camera only for face identification.
 
 To configure a step: select a tool in the **Tool library**, select **Draw ROI on image** and drag on the camera view, adjust the tool parameters, **Teach reference** for pattern and colour tools, then set the pass limits. **Test program** runs without recording a part; **Run inspection** / **Inspect** records the result. The *Operator* role can run the program but cannot change it (`ModifyRecipe`). Saved recipes and the audit trail are stored in the browser's local storage for this prototype.
 

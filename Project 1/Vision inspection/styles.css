@@ -203,3 +203,15 @@ button { cursor: pointer; }
   .roi-fields { grid-template-columns:1fr 1fr; }
   .inspection-footer .inspect-button { margin-left:0; }
 }
+
+/* Face ID and colour naming */
+.face-box { border:2px solid #4fe0b8; border-radius:3px; pointer-events:none; position:absolute; z-index:5; }
+.face-box.unknown { border-color:#ffb657; }
+.face-box b { background:#4fe0b8; color:#07231c; font:9px var(--mono); font-weight:500; left:-2px; padding:3px 6px; position:absolute; top:-19px; white-space:nowrap; }
+.face-box.unknown b { background:#ffb657; color:#3a2406; }
+.people { display:grid; gap:5px; list-style:none; margin:0; padding:0; }
+.people li { align-items:center; background:#fff; border:1px solid #e3ebea; border-radius:3px; display:flex; font-size:11px; font-weight:600; justify-content:space-between; padding:6px 9px; color:#2f4a55; }
+.people li small { color:#8a9aa0; font:9px var(--mono); font-weight:400; margin-left:6px; }
+.people li.empty { color:#8a9aa0; font-weight:400; border-style:dashed; }
+.enroll-row { display:flex; gap:8px; }
+.enroll-row input { flex:1; min-width:0; }
