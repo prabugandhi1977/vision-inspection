@@ -9,15 +9,37 @@ const els = {
   runControl: document.querySelector('#runControl'),
   simulate: document.querySelector('#simulateButton'),
   toast: document.querySelector('#toast'),
+  cameraFrame: document.querySelector('#cameraFrame'),
+  webcam: document.querySelector('#webcamFeed'),
+  capturedFrame: document.querySelector('#capturedFrame'),
+  cameraStatus: document.querySelector('#cameraStatus'),
+  cameraIndicator: document.querySelector('#cameraIndicator'),
+  cameraSource: document.querySelector('#cameraSource'),
+  cameraFormat: document.querySelector('#cameraFormat'),
+  cameraMode: document.querySelector('#cameraMode'),
+  openCamera: document.querySelector('#openCameraButton'),
+  cameraDialog: document.querySelector('#cameraDialog'),
+  closeCamera: document.querySelector('#closeCameraButton'),
+  cameraBackdrop: document.querySelector('#cameraDialogBackdrop'),
+  cameraSelect: document.querySelector('#cameraSelect'),
+  refreshCameras: document.querySelector('#refreshCameraButton'),
+  connectCamera: document.querySelector('#connectCameraButton'),
+  disconnectCamera: document.querySelector('#disconnectCameraButton'),
+  cameraConnectionState: document.querySelector('#cameraConnectionState'),
+  cameraResolution: document.querySelector('#cameraResolution'),
+  cameraHelp: document.querySelector('#cameraHelp'),
+  cameraPreview: document.querySelector('#cameraPreview'),
+  cameraSetupPreview: document.querySelector('#cameraSetupPreview'),
+  capture: document.querySelector('#captureButton'),
 };
 
-let state = { running: true, total: 12450, fails: 240, part: 1248 };
+let state = { running: true, total: 12450, fails: 240, part: 1248, cameraStream: null };
 
 const showToast = (message, type = '') => {
   els.toast.textContent = message;
   els.toast.className = `toast show ${type}`;
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => { els.toast.className = 'toast'; }, 2600);
+  showToast.timer = window.setTimeout(() => { els.toast.className = 'toast'; }, 3000);
 };
 
 const clock = () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -51,6 +73,151 @@ function addPart() {
   showToast(`${id}: ${result} · inspection recorded`, isPass ? '' : 'error');
 }
 
+function setCameraState({ connected, label = 'SIMULATED', format = '1920 × 1200', detail = 'AWAITING CAMERA' }) {
+  els.cameraFrame.classList.toggle('has-webcam', connected);
+  els.cameraStatus.textContent = label;
+  els.cameraIndicator.style.color = connected ? '#45d2af' : '#94a8af';
+  els.cameraSource.textContent = connected ? 'WEB CAMERA' : 'SIMULATION';
+  els.cameraFormat.textContent = format;
+  els.cameraMode.textContent = detail;
+  els.cameraConnectionState.textContent = connected ? 'Connected' : 'Not connected';
+  els.cameraResolution.textContent = connected ? format : '—';
+}
+
+function stopCamera() {
+  state.cameraStream?.getTracks().forEach((track) => track.stop());
+  state.cameraStream = null;
+  els.webcam.srcObject = null;
+  els.cameraSetupPreview.srcObject = null;
+  els.cameraPreview.classList.remove('has-preview');
+  els.capturedFrame.hidden = true;
+  els.capturedFrame.removeAttribute('src');
+  setCameraState({ connected: false });
+}
+
+function resetCameraHelp() {
+  els.cameraHelp.classList.remove('error');
+  els.cameraHelp.textContent = 'For a stable production setup, use a dedicated USB/industrial camera and lock its focus, lighting, and physical position.';
+}
+
+function describeCameraError(error) {
+  const name = error?.name || 'UnknownError';
+  const messages = {
+    NotAllowedError: {
+      status: 'Permission required',
+      detail: 'Camera permission is blocked. Click the camera/lock icon beside the local app address, allow camera access for this site, then reconnect.',
+    },
+    NotReadableError: {
+      status: 'Camera is busy',
+      detail: 'Another application is using the camera. Close Teams, Zoom, Windows Camera, or any other camera app, then reconnect.',
+    },
+    NotFoundError: {
+      status: 'Camera not found',
+      detail: 'No usable camera was found. Reconnect the device, then select Refresh list.',
+    },
+    OverconstrainedError: {
+      status: 'Selected camera unavailable',
+      detail: 'The selected camera is no longer available under this device ID. Select Refresh list, choose the camera again, and reconnect.',
+    },
+    SecurityError: {
+      status: 'Secure context required',
+      detail: 'Open the local app at http://127.0.0.1:4173 or http://localhost:4173; camera input is blocked from file previews and unsecured remote pages.',
+    },
+    AbortError: {
+      status: 'Camera start interrupted',
+      detail: 'The camera driver interrupted startup. Disconnect and reconnect the camera, then try again.',
+    },
+  };
+  return messages[name] || {
+    status: 'Connection failed',
+    detail: `The camera could not start (${name}). Check the camera connection and try again.`,
+  };
+}
+
+async function requestCameraStream(deviceId) {
+  const video = deviceId ? { deviceId: { exact: deviceId } } : true;
+  return navigator.mediaDevices.getUserMedia({ audio: false, video });
+}
+
+async function refreshCameraList() {
+  if (!navigator.mediaDevices?.enumerateDevices) {
+    els.cameraConnectionState.textContent = 'Browser does not support camera input';
+    return;
+  }
+  const selected = els.cameraSelect.value;
+  const cameras = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput');
+  els.cameraSelect.replaceChildren();
+  if (!cameras.length) {
+    els.cameraSelect.add(new Option('No web camera detected', ''));
+    return;
+  }
+  cameras.forEach((camera, index) => {
+    const label = camera.label || `Web camera ${index + 1} (allow access to identify)`;
+    els.cameraSelect.add(new Option(label, camera.deviceId));
+  });
+  if (cameras.some((camera) => camera.deviceId === selected)) els.cameraSelect.value = selected;
+}
+
+async function connectCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast('This browser does not support web camera capture.', 'error');
+    return;
+  }
+  els.connectCamera.disabled = true;
+  els.connectCamera.textContent = 'Connecting…';
+  els.cameraConnectionState.textContent = 'Requesting access';
+  resetCameraHelp();
+  try {
+    const selectedId = els.cameraSelect.value;
+    const stream = await requestCameraStream(selectedId);
+    state.cameraStream?.getTracks().forEach((track) => track.stop());
+    state.cameraStream = stream;
+    els.webcam.srcObject = stream;
+    els.cameraSetupPreview.srcObject = stream;
+    await els.webcam.play();
+    await els.cameraSetupPreview.play().catch(() => {});
+    const settings = stream.getVideoTracks()[0]?.getSettings() || {};
+    const format = settings.width && settings.height ? `${settings.width} × ${settings.height}` : 'LIVE STREAM';
+    const device = (await navigator.mediaDevices.enumerateDevices()).find((item) => item.deviceId === settings.deviceId);
+    const label = (device?.label || 'WEB CAMERA').replace(/^.*?\s/, '').toUpperCase().slice(0, 18) || 'WEB CAMERA';
+    els.capturedFrame.hidden = true;
+    setCameraState({ connected: true, label, format, detail: 'LIVE PREVIEW' });
+    els.cameraPreview.classList.add('has-preview');
+    await refreshCameraList();
+    showToast(`Camera connected at ${format}. Confirm the live image, then close this panel to inspect it.`);
+  } catch (error) {
+    const diagnosis = describeCameraError(error);
+    els.cameraConnectionState.textContent = diagnosis.status;
+    els.cameraHelp.textContent = diagnosis.detail;
+    els.cameraHelp.classList.add('error');
+    showToast(diagnosis.detail, 'error');
+  } finally {
+    els.connectCamera.disabled = false;
+    els.connectCamera.textContent = 'Connect camera';
+  }
+}
+
+function captureFrame() {
+  if (!state.cameraStream || !els.webcam.videoWidth) {
+    showToast('Connect a web camera before capturing an inspection image.', 'error');
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = els.webcam.videoWidth;
+  canvas.height = els.webcam.videoHeight;
+  canvas.getContext('2d').drawImage(els.webcam, 0, 0, canvas.width, canvas.height);
+  els.capturedFrame.src = canvas.toDataURL('image/jpeg', 0.92);
+  els.capturedFrame.hidden = false;
+  els.cameraStatus.textContent = 'FRAME CAPTURED';
+  els.cameraMode.textContent = 'READY TO INSPECT';
+  showToast('Inspection frame captured from the live web camera.');
+}
+
+function openCameraDialog() {
+  els.cameraDialog.hidden = false;
+  refreshCameraList().catch(() => { els.cameraConnectionState.textContent = 'Unable to list cameras'; });
+}
+
 els.runControl.addEventListener('click', () => {
   state.running = !state.running;
   els.runControl.innerHTML = state.running ? '<span>Ⅱ</span> Pause line' : '<span>▶</span> Resume line';
@@ -64,6 +231,14 @@ els.runControl.addEventListener('click', () => {
 });
 
 els.simulate.addEventListener('click', addPart);
+els.openCamera.addEventListener('click', openCameraDialog);
+els.closeCamera.addEventListener('click', () => { els.cameraDialog.hidden = true; });
+els.cameraBackdrop.addEventListener('click', () => { els.cameraDialog.hidden = true; });
+els.refreshCameras.addEventListener('click', () => refreshCameraList().catch(() => showToast('Unable to refresh the camera list.', 'error')));
+els.connectCamera.addEventListener('click', connectCamera);
+els.disconnectCamera.addEventListener('click', () => { stopCamera(); showToast('Web camera disconnected. Inspection view returned to simulation.'); });
+els.capture.addEventListener('click', captureFrame);
+window.addEventListener('beforeunload', stopCamera);
 
 document.querySelectorAll('.nav-item').forEach((item) => {
   item.addEventListener('click', () => {

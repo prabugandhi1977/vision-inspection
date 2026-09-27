@@ -71,10 +71,12 @@
           <article class="live-card card" id="inspection">
             <div class="card-heading">
               <div><span class="eyebrow">LIVE INSPECTION</span><h2>Current part <span class="live-dot">● LIVE</span></h2></div>
-              <button class="more-button" type="button" aria-label="More live inspection options">•••</button>
+              <button class="camera-config-button" type="button" id="openCameraButton">Configure camera</button>
             </div>
-            <div class="camera-frame" aria-label="Simulated camera view of current component">
-              <div class="camera-tag">CAM 01 <span>●</span></div>
+            <div class="camera-frame" id="cameraFrame" aria-label="Camera view of current component">
+              <div class="camera-tag">CAM 01 <span id="cameraIndicator">●</span><strong id="cameraStatus">SIMULATED</strong></div>
+              <video class="webcam-feed" id="webcamFeed" autoplay muted playsinline aria-label="Live web camera preview"></video>
+              <img class="captured-frame" id="capturedFrame" alt="Captured inspection frame" hidden />
               <div class="scanline"></div>
               <div class="inspection-art" aria-hidden="true">
                 <svg viewBox="0 0 760 330" role="img">
@@ -99,12 +101,13 @@
               <div class="roi roi-a"><span>01</span><small>HOLE Ø</small></div>
               <div class="roi roi-b"><span>02</span><small>ORIENTATION</small></div>
               <div class="roi roi-c"><span>03</span><small>LABEL</small></div>
-              <div class="camera-bottom"><span>EXP 4.2 ms</span><span>GAIN 1.0x</span><span>1920 × 1200</span></div>
+              <div class="camera-bottom"><span id="cameraSource">SIMULATION</span><span id="cameraFormat">1920 × 1200</span><span id="cameraMode">AWAITING CAMERA</span></div>
             </div>
             <div class="inspection-footer">
               <div><span>PART ID</span><strong id="partId">A001248</strong></div>
               <div><span>ELAPSED TIME</span><strong id="elapsedTime">0.84 sec</strong></div>
               <div class="result-indicator"><span>PRELIMINARY RESULT</span><strong><i></i> PASS</strong></div>
+              <button class="capture-button" type="button" id="captureButton">Capture frame</button>
               <button type="button" id="simulateButton">Simulate part <span>→</span></button>
             </div>
           </article>
@@ -148,6 +151,33 @@
           </article>
         </section>
       </main>
+    </div>
+
+    <div class="camera-dialog" id="cameraDialog" role="dialog" aria-modal="true" aria-labelledby="cameraDialogTitle" hidden>
+      <div class="camera-dialog__backdrop" id="cameraDialogBackdrop"></div>
+      <section class="camera-dialog__panel">
+        <header>
+          <div><span class="eyebrow">CAMERA INPUT</span><h2 id="cameraDialogTitle">Configure web camera</h2></div>
+          <button class="dialog-close" type="button" id="closeCameraButton" aria-label="Close camera configuration">×</button>
+        </header>
+        <p class="dialog-copy">Choose the camera used to acquire the inspection image. Camera access is requested only after you select <strong>Connect camera</strong>.</p>
+        <label for="cameraSelect">AVAILABLE CAMERA</label>
+        <select id="cameraSelect" aria-describedby="cameraHelp"><option value="">Default web camera</option></select>
+        <p class="camera-help" id="cameraHelp">For a stable production setup, use a dedicated USB/industrial camera and lock its focus, lighting, and physical position.</p>
+        <div class="camera-preview" id="cameraPreview">
+          <video id="cameraSetupPreview" autoplay muted playsinline aria-label="Live camera setup preview"></video>
+          <p id="cameraPreviewMessage">Live camera preview will appear here after connecting.</p>
+        </div>
+        <dl class="camera-readout">
+          <div><dt>STATUS</dt><dd id="cameraConnectionState">Not connected</dd></div>
+          <div><dt>CAPTURE FORMAT</dt><dd id="cameraResolution">—</dd></div>
+        </dl>
+        <div class="camera-dialog__actions">
+          <button class="secondary-button" type="button" id="refreshCameraButton">Refresh list</button>
+          <button class="secondary-button danger" type="button" id="disconnectCameraButton">Disconnect</button>
+          <button class="primary-button" type="button" id="connectCameraButton">Connect camera</button>
+        </div>
+      </section>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
