@@ -212,6 +212,7 @@
         <label for="cameraSelect">AVAILABLE CAMERA</label>
         <select id="cameraSelect" aria-describedby="cameraHelp"><option value="">Default web camera</option></select>
         <p class="camera-help" id="cameraHelp">For a stable production setup, use a dedicated USB/industrial camera and lock its focus, lighting, and physical position.</p>
+        <label class="mirror-toggle"><input type="checkbox" id="mirrorToggle" checked /> Mirror image <small>(selfie view: moves the same way you do)</small></label>
         <div class="camera-preview" id="cameraPreview">
           <video id="cameraSetupPreview" autoplay muted playsinline aria-label="Live camera setup preview"></video>
           <p id="cameraPreviewMessage">Live camera preview will appear here after connecting.</p>

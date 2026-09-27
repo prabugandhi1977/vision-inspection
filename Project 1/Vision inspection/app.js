@@ -31,9 +31,27 @@ const els = {
   cameraPreview: document.querySelector('#cameraPreview'),
   cameraSetupPreview: document.querySelector('#cameraSetupPreview'),
   capture: document.querySelector('#captureButton'),
+  mirror: document.querySelector('#mirrorToggle'),
 };
 
-let state = { running: true, total: 12450, fails: 240, part: 1248, cameraStream: null };
+let state = { running: true, total: 12450, fails: 240, part: 1248, cameraStream: null, mirror: true };
+
+try { state.mirror = localStorage.getItem('visionforge.mirror') !== 'false'; } catch { /* keep default */ }
+
+// Webcams deliver an un-mirrored image; mirroring makes the view move the same way as the person.
+// The same flip is applied to captured frames and analysed images so ROIs match what is shown.
+function applyMirror() {
+  els.mirror.checked = state.mirror;
+  els.cameraFrame.classList.toggle('mirrored', state.mirror);
+  els.cameraPreview.classList.toggle('mirrored', state.mirror);
+}
+
+function drawCameraFrame(ctx, width, height) {
+  ctx.save();
+  if (state.mirror) { ctx.translate(width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(els.webcam, 0, 0, width, height);
+  ctx.restore();
+}
 
 const showToast = (message, type = '') => {
   els.toast.textContent = message;
@@ -232,7 +250,7 @@ function captureFrame() {
   const canvas = document.createElement('canvas');
   canvas.width = els.webcam.videoWidth;
   canvas.height = els.webcam.videoHeight;
-  canvas.getContext('2d').drawImage(els.webcam, 0, 0, canvas.width, canvas.height);
+  drawCameraFrame(canvas.getContext('2d'), canvas.width, canvas.height);
   els.capturedFrame.src = canvas.toDataURL('image/jpeg', 0.92);
   els.capturedFrame.hidden = false;
   els.cameraStatus.textContent = 'FRAME CAPTURED';
@@ -265,6 +283,12 @@ els.refreshCameras.addEventListener('click', () => refreshCameraList().catch(() 
 els.connectCamera.addEventListener('click', connectCamera);
 els.disconnectCamera.addEventListener('click', () => { stopCamera(); showToast('Web camera disconnected. Inspection view returned to simulation.'); });
 els.capture.addEventListener('click', captureFrame);
+els.mirror.addEventListener('change', () => {
+  state.mirror = els.mirror.checked;
+  try { localStorage.setItem('visionforge.mirror', String(state.mirror)); } catch { /* session only */ }
+  applyMirror();
+});
+applyMirror();
 window.addEventListener('beforeunload', stopCamera);
 
 document.querySelectorAll('.nav-item').forEach((item) => {

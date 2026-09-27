@@ -217,3 +217,8 @@ button { cursor: pointer; }
 .enroll-row input { flex:1; min-width:0; }
 .step-remove { background:transparent; border:0; border-left:1px solid #edf0ef; color:#b0bdc1; font-size:16px; line-height:1; padding:0 11px; }
 .step-remove:hover:not(:disabled) { background:#fdf0ef; color:#c9564d; }
+
+/* Mirrored (selfie) camera view */
+.camera-frame.mirrored .webcam-feed,.camera-preview.mirrored video { transform:scaleX(-1); }
+.mirror-toggle { align-items:center; color:#35535d!important; display:flex!important; font:11px var(--sans)!important; gap:7px; letter-spacing:0!important; margin:0 0 12px!important; }
+.mirror-toggle small { color:#87989c; font-size:10px; }
