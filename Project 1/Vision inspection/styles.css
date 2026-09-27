@@ -222,3 +222,5 @@ button { cursor: pointer; }
 .camera-frame.mirrored .webcam-feed,.camera-preview.mirrored video { transform:scaleX(-1); }
 .mirror-toggle { align-items:center; color:#35535d!important; display:flex!important; font:11px var(--sans)!important; gap:7px; letter-spacing:0!important; margin:0 0 12px!important; }
 .mirror-toggle small { color:#87989c; font-size:10px; }
+.person-actions { align-items:center; display:flex; gap:12px; }
+.person-actions .text-button { font-size:10px; }
