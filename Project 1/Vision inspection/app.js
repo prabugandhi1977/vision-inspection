@@ -313,17 +313,7 @@ els.mirror.addEventListener('change', () => {
 applyMirror();
 window.addEventListener('beforeunload', stopCamera);
 
-document.querySelectorAll('.nav-item').forEach((item) => {
-  item.addEventListener('click', () => {
-    document.querySelector('.nav-item.active').classList.remove('active');
-    item.classList.add('active');
-    if (item.getAttribute('href') === '#dashboard') window.scrollTo({ top: 0, behavior: 'smooth' });
-    else document.querySelector(item.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-});
 
 document.querySelector('#detailsButton').addEventListener('click', () => showToast('Inspection A001247: all enabled steps passed.'));
 document.querySelector('#allResults').addEventListener('click', () => showToast('Traceability archive is ready for filtered review.'));
 document.querySelector('#periodButton').addEventListener('click', () => showToast('Showing defect distribution for Shift 1.'));
-document.querySelector('#notifications').addEventListener('click', () => showToast('2 notifications: retention review and scheduled calibration.'));
-document.querySelector('#helpButton').addEventListener('click', () => showToast('Operator help: acknowledge alarms or contact your line lead.'));

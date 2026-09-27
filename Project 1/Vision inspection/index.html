@@ -3,206 +3,239 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07111d" />
+    <meta name="theme-color" content="#19191A" />
     <title>VisionForge | Station 01</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="Primary navigation">
-        <a class="brand" href="#dashboard" aria-label="VisionForge dashboard">
-          <span class="brand-mark"><i></i><i></i><i></i></span>
-          <span>VISION<span>FORGE</span></span>
-        </a>
-
-        <nav class="nav-list">
-          <a class="nav-item active" href="#dashboard" data-view="Dashboard"><span class="nav-icon">⌘</span>Dashboard</a>
-          <a class="nav-item" href="#inspection" data-view="Live inspection"><span class="nav-icon">◉</span>Live inspection</a>
-          <a class="nav-item" href="#results" data-view="Results"><span class="nav-icon">▦</span>Results <em>12</em></a>
-          <a class="nav-item" href="#recipes" data-view="Recipes"><span class="nav-icon">◫</span>Recipes</a>
-          <a class="nav-item" href="#analytics" data-view="Analytics"><span class="nav-icon">⌁</span>Analytics</a>
-          <a class="nav-item" href="#alarms" data-view="Alarms"><span class="nav-icon">△</span>Alarms</a>
-          <a class="nav-item" href="#settings" data-view="Settings" id="settingsNav" hidden><span class="nav-icon">⚙</span>Settings</a>
-        </nav>
-
-        <div class="sidebar-bottom">
-          <div class="station-card">
-            <span class="eyebrow">ACTIVE STATION</span>
-            <strong><span id="stationName">Station 01</span> <b>●</b></strong>
-            <small id="lineName">LINE A · CELL 04</small>
-          </div>
-          <button class="operator" type="button" id="profileButton">
-            <span class="avatar" id="userAvatar">SM</span>
-            <span><strong id="userName">Sakthi M.</strong><small id="userRole">Operator</small></span>
-            <b>···</b>
-          </button>
+    <div class="app-shell" id="appShell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand"><span class="brand-mark">Vision<em>Forge</em></span></div>
+          <span class="brand-tagline">Automated quality inspection</span>
         </div>
+        <nav class="side-nav" id="sideNav" aria-label="Primary"></nav>
       </aside>
 
-      <main class="content">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">PRODUCTION / LINE A</p>
-            <h1><span id="greeting">Good morning, Sakthi</span> <span>⌄</span></h1>
-          </div>
-          <div class="topbar-actions">
-            <span class="shift"><i></i> SHIFT 1 <b>06:00–14:00</b></span>
-            <button class="icon-button" type="button" id="notifications" aria-label="Notifications">♢<sup>2</sup></button>
-            <button class="help-button" type="button" id="helpButton">?</button>
-          </div>
-        </header>
-
-        <section class="status-strip" aria-label="Current production state">
-          <div class="running-status"><span class="pulse"></span><strong>RUNNING</strong><span>Component_A</span><b>Recipe v1.2</b></div>
-          <div class="connection-status"><span><i class="connected"></i> Camera <b>Connected</b></span><span><i class="connected"></i> PLC <b>Connected</b></span><span><i class="machine"></i> Machine <b>Auto</b></span></div>
-          <button class="stop-button" type="button" id="runControl" data-permission="RunInspection"><span>Ⅱ</span> Pause line</button>
-        </section>
-
-        <section class="metrics" aria-label="Today at a glance">
-          <article class="metric-card total"><div><span class="metric-label">TODAY'S OUTPUT</span><strong id="totalCount">12,450</strong><small><b>+8.2%</b> vs. last shift</small></div><span class="metric-icon">◒</span></article>
-          <article class="metric-card pass"><div><span class="metric-label">PASS RATE</span><strong id="passRate">98.07<sup>%</sup></strong><small><b>↑ 0.4%</b> within target</small></div><span class="metric-icon">✓</span></article>
-          <article class="metric-card fail"><div><span class="metric-label">REJECTED</span><strong id="failCount">240</strong><small><b>1.93%</b> of inspected parts</small></div><span class="metric-icon">×</span></article>
-          <article class="metric-card cycle"><div><span class="metric-label">AVG. CYCLE TIME</span><strong id="cycleTime">1.42<sup>s</sup></strong><small><b>Target 1.50s</b> <span class="target-ok">●</span></small></div><span class="metric-icon">◷</span></article>
-        </section>
-
-        <section class="work-grid">
-          <article class="live-card card" id="inspection">
-            <div class="card-heading">
-              <div><span class="eyebrow">LIVE INSPECTION</span><h2>Current part <span class="live-dot">● LIVE</span></h2></div>
-              <button class="camera-config-button" type="button" id="openCameraButton" data-permission="ConfigureCamera">Configure camera</button>
-            </div>
-            <div class="camera-frame" id="cameraFrame" aria-label="Camera view of current component">
-              <div class="camera-tag">CAM 01 <span id="cameraIndicator">●</span><strong id="cameraStatus">SIMULATED</strong></div>
-              <video class="webcam-feed" id="webcamFeed" autoplay muted playsinline aria-label="Live web camera preview"></video>
-              <img class="webcam-feed gateway-feed" id="gatewayFeed" alt="Live image from the connected smart camera" hidden />
-              <img class="captured-frame" id="capturedFrame" alt="Captured inspection frame" hidden />
-              <div class="scanline"></div>
-              <div class="inspection-art" aria-hidden="true">
-                <svg viewBox="0 0 760 330" role="img">
-                  <defs>
-                    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#cbd4d8"/><stop offset=".46" stop-color="#768892"/><stop offset="1" stop-color="#33434d"/></linearGradient>
-                    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#e2eaec"/><stop offset="1" stop-color="#5c6b74"/></linearGradient>
-                    <filter id="shadow"><feGaussianBlur stdDeviation="9"/></filter>
-                  </defs>
-                  <ellipse cx="380" cy="258" rx="277" ry="32" fill="#041019" opacity=".65" filter="url(#shadow)"/>
-                  <path d="M108 106h138l38-40h195l34 40h139c28 0 47 19 47 42v72c0 25-20 45-45 45H106c-26 0-46-20-46-45v-69c0-25 20-45 48-45Z" fill="url(#plate)" stroke="#d7e0e1" stroke-width="3"/>
-                  <path d="M130 121h120l35-34h190l33 34h122" fill="none" stroke="#f0f5f3" opacity=".5" stroke-width="3"/>
-                  <rect x="311" y="105" width="137" height="122" rx="10" fill="#192c35" stroke="#d0e4df" stroke-width="5"/>
-                  <rect x="326" y="120" width="107" height="92" rx="5" fill="#61757a"/>
-                  <circle cx="205" cy="186" r="37" fill="url(#rim)" stroke="#23343e" stroke-width="7"/>
-                  <circle cx="205" cy="186" r="20" fill="#15262e"/>
-                  <circle cx="552" cy="186" r="37" fill="url(#rim)" stroke="#23343e" stroke-width="7"/>
-                  <circle cx="552" cy="186" r="20" fill="#15262e"/>
-                  <circle cx="278" cy="222" r="11" fill="#172a33"/><circle cx="480" cy="222" r="11" fill="#172a33"/>
-                  <path d="M92 190h78M590 190h78" stroke="#4ae0bd" stroke-width="2" stroke-dasharray="4 7" opacity=".8"/>
-                  <g id="simDefect" display="none">
-                    <path class="sim-scratch" d="M-24 -7 L24 7" stroke="#1b2830" stroke-width="3.5" stroke-linecap="round"/>
-                    <ellipse class="sim-stain" cx="3" cy="13" rx="10" ry="6" fill="#26343c" opacity=".85"/>
-                  </g>
-                </svg>
+      <div class="app-main">
+        <div class="topbar">
+          <div class="topbar-inner">
+            <div class="top-controls">
+              <span class="sync-pill" title="Active station"><span class="sync-dot" id="stationDot"></span><span id="stationName">Station 01</span><span class="pill-sep">·</span><span id="lineName">LINE A · CELL 04</span></span>
+              <div class="field-inline"><span class="field-label">Viewing as</span><span class="chip" id="userRole">Operator</span></div>
+              <div class="field-inline"><span class="field-label">Name</span><span class="chip" id="userName">Sakthi M.</span></div>
+              <div class="theme-toggle" id="themeToggle" role="group" aria-label="Colour theme">
+                <button type="button" class="theme-btn" data-theme-choice="light"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4"/></svg>Light</button>
+                <button type="button" class="theme-btn" data-theme-choice="dark"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5a5 5 0 0 0 7 7Z"/></svg>Dark</button>
+                <button type="button" class="theme-btn" data-theme-choice="system">Auto</button>
               </div>
-              <div class="roi-layer" id="roiLayer"></div>
-              <div class="draw-hint" id="drawHint" hidden>Drag on the image to draw the ROI · Esc to cancel</div>
-              <div class="camera-bottom"><span id="cameraSource">SIMULATION</span><span id="cameraFormat">1920 × 1200</span><span id="cameraMode">AWAITING CAMERA</span></div>
-            </div>
-            <div class="inspection-footer">
-              <div><span>PART ID</span><strong id="partId">A001248</strong></div>
-              <div><span>ELAPSED TIME</span><strong id="elapsedTime">0.84 sec</strong></div>
-              <div class="result-indicator" id="overallResult"><span>LAST RESULT</span><strong><i></i> PASS</strong></div>
-              <button class="capture-button" type="button" id="captureButton" data-permission="RunInspection">Capture frame</button>
-              <button class="inspect-button" type="button" id="inspectButton" data-permission="RunInspection">Inspect</button>
-              <button type="button" class="defect-button" id="defectButton" data-permission="RunInspection" aria-pressed="false" title="Add a scratch or stain to the simulated part to test AI anomaly detection">Add defect</button>
-              <button type="button" id="simulateButton" data-permission="RunInspection">Simulate part <span>→</span></button>
-            </div>
-          </article>
-
-          <aside class="result-card card">
-            <div class="card-heading"><div><span class="eyebrow">LAST INSPECTION</span><h2>Result detail</h2></div><span class="pass-pill" id="resultPill">PASS</span></div>
-            <div class="last-part"><span class="part-icon">▣</span><div><strong id="resultPart">A001247</strong><small id="resultMeta">10:32:18 · Component_A</small></div><b id="resultCycle">1.39s</b></div>
-            <div class="checks" id="resultChecks">
-              <div class="check"><span class="check-number">01</span><div><strong>Part presence</strong><small>Feature detected</small></div><b>PASS</b><i>✓</i></div>
-              <div class="check"><span class="check-number">02</span><div><strong>Hole diameter</strong><small>10.06 mm <em>± 0.10 mm</em></small></div><b>PASS</b><i>✓</i></div>
-              <div class="check"><span class="check-number">03</span><div><strong>Orientation</strong><small>0.2° <em>max. 2.0°</em></small></div><b>PASS</b><i>✓</i></div>
-              <div class="check"><span class="check-number">04</span><div><strong>Surface finish</strong><small>No anomaly detected</small></div><b>PASS</b><i>✓</i></div>
-            </div>
-            <button class="view-detail" type="button" id="detailsButton">View inspection details <span>→</span></button>
-          </aside>
-        </section>
-
-        <section class="program-card card" id="recipes" aria-labelledby="programTitle">
-          <div class="card-heading program-heading">
-            <div>
-              <span class="eyebrow">INSPECTION PROGRAM</span>
-              <h2 id="programTitle"><span id="programProduct">Component_A</span> · Recipe <span id="programVersion">v1.2</span> <span class="program-state" id="programState">APPROVED</span></h2>
-            </div>
-            <div class="program-actions">
-              <span class="signed-in" id="programUser">Signed in</span>
-              <button class="secondary-button" type="button" id="learnLimitsButton" title="Run good parts and let the app propose pass limits for every tool">Learn limits</button>
-              <button class="primary-button" type="button" id="runInspectionButton" data-permission="RunInspection">Run inspection</button>
+              <button type="button" class="btn btn-sm btn-ghost" id="logoutButton">Sign out</button>
             </div>
           </div>
-          <div class="approval-banner" id="approvalBanner" hidden></div>
-          <ol class="workflow" aria-label="Inspection program workflow">
-            <li><b>1</b><span>Acquire image<small>Camera · captured frame</small></span></li>
-            <li><b>2</b><span>Locate part<small>Pattern locator · position adjust</small></span></li>
-            <li><b>3</b><span>Inspect features<small>Tool + ROI per step</small></span></li>
-            <li><b>4</b><span>Judge criteria<small>Min / max limits</small></span></li>
-            <li><b>5</b><span>Save &amp; approve<small>Versioned · audited</small></span></li>
-          </ol>
-          <p class="permission-note" id="permissionNote" hidden>Your role can run the program, but changing tools, ROIs, or criteria needs the <b>ModifyRecipe</b> permission.</p>
-          <div class="program-grid">
-            <div class="tool-library">
-              <h3>Tool library</h3>
-              <p class="panel-hint">Select a tool to add it as a new inspection step.</p>
-              <div id="toolLibrary"></div>
-            </div>
-            <div class="step-list">
-              <h3>Inspection steps <span id="stepCount"></span></h3>
-              <ol id="stepList"></ol>
-              <label class="calibration">CALIBRATION <input type="number" id="pxPerMm" min="0.1" step="0.01" /> px / mm</label>
-            </div>
-            <div class="step-editor" id="stepEditor"></div>
-          </div>
-          <div class="program-footer">
-            <input type="text" id="changeReason" placeholder="Reason for change (required to save a new version)" aria-label="Reason for change" />
-            <button class="secondary-button" type="button" id="revertRecipeButton">Discard changes</button>
-            <button class="primary-button" type="button" id="saveRecipeButton">Save as new version</button>
-          </div>
-          <details class="audit">
-            <summary>Audit trail <span id="auditCount"></span></summary>
-            <ol id="auditList"></ol>
-          </details>
-        </section>
+        </div>
 
-        <section class="lower-grid">
-          <article class="recent-card card" id="results">
-            <div class="card-heading"><div><span class="eyebrow">TRACEABILITY</span><h2>Recent results</h2></div><button class="text-button" type="button" id="allResults">View all <span>→</span></button></div>
-            <div class="table-wrap"><table>
-              <thead><tr><th>TIME</th><th>PART ID</th><th>RESULT</th><th>RECIPE</th><th>CYCLE</th><th></th></tr></thead>
-              <tbody id="recentTable">
-                <tr><td>10:32:18</td><td><strong>A001247</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.39s</td><td><button aria-label="View part A001247">›</button></td></tr>
-                <tr><td>10:32:17</td><td><strong>A001246</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.43s</td><td><button aria-label="View part A001246">›</button></td></tr>
-                <tr><td>10:32:15</td><td><strong>A001245</strong></td><td><span class="result-chip fail-chip">● FAIL</span></td><td>v1.2</td><td>1.49s</td><td><button aria-label="View part A001245">›</button></td></tr>
-                <tr><td>10:32:14</td><td><strong>A001244</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.40s</td><td><button aria-label="View part A001244">›</button></td></tr>
-              </tbody>
-            </table></div>
-          </article>
-
-          <article class="defect-card card" id="analytics">
-            <div class="card-heading"><div><span class="eyebrow">QUALITY INSIGHT</span><h2>Defect distribution</h2></div><button class="period-button" type="button" id="periodButton">This shift <span>⌄</span></button></div>
-            <div class="defect-total"><strong>240</strong><span>rejects this shift<br/><b>1.93% of output</b></span></div>
-            <div class="defect-bars">
-              <div><span>Surface defect <b>102</b></span><i><em style="width: 72%"></em></i></div>
-              <div><span>Hole diameter <b>68</b></span><i><em style="width: 49%"></em></i></div>
-              <div><span>Orientation <b>43</b></span><i><em style="width: 31%"></em></i></div>
-              <div><span>Label / OCR <b>27</b></span><i><em style="width: 20%"></em></i></div>
+        <main id="main">
+          <section class="view" id="view-overview" aria-labelledby="overviewTitle">
+            <div class="view-head">
+              <div>
+                <h2 id="overviewTitle">Station overview</h2>
+                <p>Output, yield and cycle time for this shift, the line and hardware status, and the latest inspection results.</p>
+              </div>
             </div>
-          </article>
-        </section>
-      </main>
+    <section class="status-strip" aria-label="Current production state">
+              <div class="running-status"><span class="pulse"></span><strong>RUNNING</strong><span>Component_A</span><b>Recipe v1.2</b></div>
+              <div class="connection-status"><span><i class="connected"></i> Camera <b>Connected</b></span><span><i class="connected"></i> PLC <b>Connected</b></span><span><i class="machine"></i> Machine <b>Auto</b></span></div>
+              <button class="stop-button" type="button" id="runControl" data-permission="RunInspection"><span>Ⅱ</span> Pause line</button>
+            </section>
+    <section class="metrics" aria-label="Today at a glance">
+              <article class="metric-card total"><div><span class="metric-label">TODAY'S OUTPUT</span><strong id="totalCount">12,450</strong><small><b>+8.2%</b> vs. last shift</small></div><span class="metric-icon">◒</span></article>
+              <article class="metric-card pass"><div><span class="metric-label">PASS RATE</span><strong id="passRate">98.07<sup>%</sup></strong><small><b>↑ 0.4%</b> within target</small></div><span class="metric-icon">✓</span></article>
+              <article class="metric-card fail"><div><span class="metric-label">REJECTED</span><strong id="failCount">240</strong><small><b>1.93%</b> of inspected parts</small></div><span class="metric-icon">×</span></article>
+              <article class="metric-card cycle"><div><span class="metric-label">AVG. CYCLE TIME</span><strong id="cycleTime">1.42<sup>s</sup></strong><small><b>Target 1.50s</b> <span class="target-ok">●</span></small></div><span class="metric-icon">◷</span></article>
+            </section>
+            <div class="grid-2">
+    <article class="recent-card card" id="results">
+                <div class="card-heading"><div><span class="eyebrow">TRACEABILITY</span><h2>Recent results</h2></div><button class="text-button" type="button" id="allResults">View all <span>→</span></button></div>
+                <div class="table-wrap"><table>
+                  <thead><tr><th>TIME</th><th>PART ID</th><th>RESULT</th><th>RECIPE</th><th>CYCLE</th><th></th></tr></thead>
+                  <tbody id="recentTable">
+                    <tr><td>10:32:18</td><td><strong>A001247</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.39s</td><td><button aria-label="View part A001247">›</button></td></tr>
+                    <tr><td>10:32:17</td><td><strong>A001246</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.43s</td><td><button aria-label="View part A001246">›</button></td></tr>
+                    <tr><td>10:32:15</td><td><strong>A001245</strong></td><td><span class="result-chip fail-chip">● FAIL</span></td><td>v1.2</td><td>1.49s</td><td><button aria-label="View part A001245">›</button></td></tr>
+                    <tr><td>10:32:14</td><td><strong>A001244</strong></td><td><span class="result-chip pass-chip">● PASS</span></td><td>v1.2</td><td>1.40s</td><td><button aria-label="View part A001244">›</button></td></tr>
+                  </tbody>
+                </table></div>
+              </article>
+    <article class="defect-card card" id="analytics">
+                <div class="card-heading"><div><span class="eyebrow">QUALITY INSIGHT</span><h2>Defect distribution</h2></div><button class="period-button" type="button" id="periodButton">This shift <span>⌄</span></button></div>
+                <div class="defect-total"><strong>240</strong><span>rejects this shift<br/><b>1.93% of output</b></span></div>
+                <div class="defect-bars">
+                  <div><span>Surface defect <b>102</b></span><i><em style="width: 72%"></em></i></div>
+                  <div><span>Hole diameter <b>68</b></span><i><em style="width: 49%"></em></i></div>
+                  <div><span>Orientation <b>43</b></span><i><em style="width: 31%"></em></i></div>
+                  <div><span>Label / OCR <b>27</b></span><i><em style="width: 20%"></em></i></div>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="view" id="view-live" aria-labelledby="liveTitle" hidden>
+            <div class="view-head">
+              <div>
+                <h2 id="liveTitle">Live inspection</h2>
+                <p>The current part as the camera sees it, with each step's region and result. Inspect runs the approved program on this image.</p>
+              </div>
+            </div>
+    <section class="work-grid">
+              <article class="live-card card" id="inspection">
+                <div class="card-heading">
+                  <div><span class="eyebrow">LIVE INSPECTION</span><h2>Current part <span class="live-dot">● LIVE</span></h2></div>
+                  <button class="camera-config-button" type="button" id="openCameraButton" data-permission="ConfigureCamera">Configure camera</button>
+                </div>
+                <div class="camera-frame" id="cameraFrame" aria-label="Camera view of current component">
+                  <div class="camera-tag">CAM 01 <span id="cameraIndicator">●</span><strong id="cameraStatus">SIMULATED</strong></div>
+                  <video class="webcam-feed" id="webcamFeed" autoplay muted playsinline aria-label="Live web camera preview"></video>
+                  <img class="webcam-feed gateway-feed" id="gatewayFeed" alt="Live image from the connected smart camera" hidden />
+                  <img class="captured-frame" id="capturedFrame" alt="Captured inspection frame" hidden />
+                  <div class="scanline"></div>
+                  <div class="inspection-art" aria-hidden="true">
+                    <svg viewBox="0 0 760 330" role="img">
+                      <defs>
+                        <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#cbd4d8"/><stop offset=".46" stop-color="#768892"/><stop offset="1" stop-color="#33434d"/></linearGradient>
+                        <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#e2eaec"/><stop offset="1" stop-color="#5c6b74"/></linearGradient>
+                        <filter id="shadow"><feGaussianBlur stdDeviation="9"/></filter>
+                      </defs>
+                      <ellipse cx="380" cy="258" rx="277" ry="32" fill="#041019" opacity=".65" filter="url(#shadow)"/>
+                      <path d="M108 106h138l38-40h195l34 40h139c28 0 47 19 47 42v72c0 25-20 45-45 45H106c-26 0-46-20-46-45v-69c0-25 20-45 48-45Z" fill="url(#plate)" stroke="#d7e0e1" stroke-width="3"/>
+                      <path d="M130 121h120l35-34h190l33 34h122" fill="none" stroke="#f0f5f3" opacity=".5" stroke-width="3"/>
+                      <rect x="311" y="105" width="137" height="122" rx="10" fill="#192c35" stroke="#d0e4df" stroke-width="5"/>
+                      <rect x="326" y="120" width="107" height="92" rx="5" fill="#61757a"/>
+                      <circle cx="205" cy="186" r="37" fill="url(#rim)" stroke="#23343e" stroke-width="7"/>
+                      <circle cx="205" cy="186" r="20" fill="#15262e"/>
+                      <circle cx="552" cy="186" r="37" fill="url(#rim)" stroke="#23343e" stroke-width="7"/>
+                      <circle cx="552" cy="186" r="20" fill="#15262e"/>
+                      <circle cx="278" cy="222" r="11" fill="#172a33"/><circle cx="480" cy="222" r="11" fill="#172a33"/>
+                      <path d="M92 190h78M590 190h78" stroke="#4ae0bd" stroke-width="2" stroke-dasharray="4 7" opacity=".8"/>
+                      <g id="simDefect" display="none">
+                        <path class="sim-scratch" d="M-24 -7 L24 7" stroke="#1b2830" stroke-width="3.5" stroke-linecap="round"/>
+                        <ellipse class="sim-stain" cx="3" cy="13" rx="10" ry="6" fill="#26343c" opacity=".85"/>
+                      </g>
+                    </svg>
+                  </div>
+                  <div class="roi-layer" id="roiLayer"></div>
+                  <div class="draw-hint" id="drawHint" hidden>Drag on the image to draw the ROI · Esc to cancel</div>
+                  <div class="camera-bottom"><span id="cameraSource">SIMULATION</span><span id="cameraFormat">1920 × 1200</span><span id="cameraMode">AWAITING CAMERA</span></div>
+                </div>
+                <div class="inspection-footer">
+                  <div><span>PART ID</span><strong id="partId">A001248</strong></div>
+                  <div><span>ELAPSED TIME</span><strong id="elapsedTime">0.84 sec</strong></div>
+                  <div class="result-indicator" id="overallResult"><span>LAST RESULT</span><strong><i></i> PASS</strong></div>
+                  <button class="capture-button" type="button" id="captureButton" data-permission="RunInspection">Capture frame</button>
+                  <button class="inspect-button" type="button" id="inspectButton" data-permission="RunInspection">Inspect</button>
+                  <button type="button" class="defect-button" id="defectButton" data-permission="RunInspection" aria-pressed="false" title="Add a scratch or stain to the simulated part to test AI anomaly detection">Add defect</button>
+                  <button type="button" id="simulateButton" data-permission="RunInspection">Simulate part <span>→</span></button>
+                </div>
+              </article>
+    
+              <aside class="result-card card">
+                <div class="card-heading"><div><span class="eyebrow">LAST INSPECTION</span><h2>Result detail</h2></div><span class="pass-pill" id="resultPill">PASS</span></div>
+                <div class="last-part"><span class="part-icon">▣</span><div><strong id="resultPart">A001247</strong><small id="resultMeta">10:32:18 · Component_A</small></div><b id="resultCycle">1.39s</b></div>
+                <div class="checks" id="resultChecks">
+                  <div class="check"><span class="check-number">01</span><div><strong>Part presence</strong><small>Feature detected</small></div><b>PASS</b><i>✓</i></div>
+                  <div class="check"><span class="check-number">02</span><div><strong>Hole diameter</strong><small>10.06 mm <em>± 0.10 mm</em></small></div><b>PASS</b><i>✓</i></div>
+                  <div class="check"><span class="check-number">03</span><div><strong>Orientation</strong><small>0.2° <em>max. 2.0°</em></small></div><b>PASS</b><i>✓</i></div>
+                  <div class="check"><span class="check-number">04</span><div><strong>Surface finish</strong><small>No anomaly detected</small></div><b>PASS</b><i>✓</i></div>
+                </div>
+                <button class="view-detail" type="button" id="detailsButton">View inspection details <span>→</span></button>
+              </aside>
+            </section>
+          </section>
+
+          <section class="view" id="view-program" aria-labelledby="programViewTitle" hidden>
+            <div class="view-head">
+              <div>
+                <h2 id="programViewTitle">Inspection program</h2>
+                <p>Tools, regions of interest and pass limits for the active recipe. Changes are versioned, approved and recorded in the audit log.</p>
+              </div>
+            </div>
+    <section class="program-card card" id="recipes" aria-labelledby="programTitle">
+              <div class="card-heading program-heading">
+                <div>
+                  <span class="eyebrow">INSPECTION PROGRAM</span>
+                  <h2 id="programTitle"><span id="programProduct">Component_A</span> · Recipe <span id="programVersion">v1.2</span> <span class="program-state" id="programState">APPROVED</span></h2>
+                </div>
+                <div class="program-actions">
+                  <span class="signed-in" id="programUser">Signed in</span>
+                  <button class="secondary-button" type="button" id="learnLimitsButton" title="Run good parts and let the app propose pass limits for every tool">Learn limits</button>
+                  <button class="primary-button" type="button" id="runInspectionButton" data-permission="RunInspection">Run inspection</button>
+                </div>
+              </div>
+              <div class="approval-banner" id="approvalBanner" hidden></div>
+              <ol class="workflow" aria-label="Inspection program workflow">
+                <li><b>1</b><span>Acquire image<small>Camera · captured frame</small></span></li>
+                <li><b>2</b><span>Locate part<small>Pattern locator · position adjust</small></span></li>
+                <li><b>3</b><span>Inspect features<small>Tool + ROI per step</small></span></li>
+                <li><b>4</b><span>Judge criteria<small>Min / max limits</small></span></li>
+                <li><b>5</b><span>Save &amp; approve<small>Versioned · audited</small></span></li>
+              </ol>
+              <p class="permission-note" id="permissionNote" hidden>Your role can run the program, but changing tools, ROIs, or criteria needs the <b>ModifyRecipe</b> permission.</p>
+              <div class="program-grid">
+                <div class="tool-library">
+                  <h3>Tool library</h3>
+                  <p class="panel-hint">Select a tool to add it as a new inspection step.</p>
+                  <div id="toolLibrary"></div>
+                </div>
+                <div class="step-list">
+                  <h3>Inspection steps <span id="stepCount"></span></h3>
+                  <ol id="stepList"></ol>
+                  <label class="calibration">CALIBRATION <input type="number" id="pxPerMm" min="0.1" step="0.01" /> px / mm</label>
+                </div>
+                <div class="step-editor" id="stepEditor"></div>
+              </div>
+              <div class="program-footer">
+                <input type="text" id="changeReason" placeholder="Reason for change (required to save a new version)" aria-label="Reason for change" />
+                <button class="secondary-button" type="button" id="revertRecipeButton">Discard changes</button>
+                <button class="primary-button" type="button" id="saveRecipeButton">Save as new version</button>
+              </div>
+            </section>
+          </section>
+
+          <section class="view" id="view-audit" aria-labelledby="auditTitle" hidden>
+            <div class="view-head">
+              <div>
+                <h2 id="auditTitle">Audit log</h2>
+                <p>Every sign-in, recipe submission, approval, rejection, camera, user and settings change, with who, when, old → new value and reason.</p>
+              </div>
+            </div>
+            <div class="card audit-card">
+              <div class="card-head"><h3>Recorded changes</h3><span class="hint" id="auditCount"></span></div>
+              <ol id="auditList"></ol>
+            </div>
+          </section>
+
+          <section class="view" id="view-settings" aria-labelledby="settingsTitle" hidden>
+            <div class="view-head">
+              <div>
+                <h2 id="settingsTitle">Settings</h2>
+                <p>Your account, and for administrators the users, roles and station configuration.</p>
+              </div>
+            </div>
+            <div class="card settings-card">
+              <nav class="settings-tabs" id="settingsTabs">
+          <button type="button" data-tab="account">My account</button>
+          <button type="button" data-tab="users" data-permission="ManageUsers">Users</button>
+          <button type="button" data-tab="roles">Roles &amp; permissions</button>
+          <button type="button" data-tab="station" data-permission="ManageSettings">Station &amp; data</button>
+        </nav>
+              <div class="settings-body" id="settingsBody"></div>
+            </div>
+          </section>
+        </main>
+        <footer class="app-foot">VisionForge — a browser prototype of a vision inspection station. Sign-in and data are stored in this browser; production needs the planned PLC, camera, database and server-side sign-in integration.</footer>
+      </div>
     </div>
 
     <div class="camera-dialog" id="cameraDialog" role="dialog" aria-modal="true" aria-labelledby="cameraDialogTitle" hidden>
@@ -265,8 +298,8 @@
 
     <div class="login-screen" id="loginScreen" hidden>
       <form class="login-panel" id="loginForm" autocomplete="off">
-        <div class="brand login-brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>VISION<span>FORGE</span></span></div>
-        <h2>Sign in to <span id="loginStation">Station 01</span></h2>
+        <div class="brand login-brand"><span class="brand-mark">Vision<em>Forge</em></span></div>
+        <p class="login-tagline">Sign in to <span id="loginStation">Station 01</span></p>
         <label for="loginUser">USERNAME</label>
         <input id="loginUser" type="text" autocomplete="username" required />
         <label for="loginPassword">PASSWORD</label>
@@ -279,30 +312,6 @@
           <small>Demo sign-in runs entirely in this browser and is not real security.</small>
         </div>
       </form>
-    </div>
-
-    <div class="profile-menu" id="profileMenu" hidden>
-      <button type="button" data-open-settings="account">My account</button>
-      <button type="button" data-open-settings="users" data-permission="ManageUsers">Users &amp; roles</button>
-      <button type="button" data-open-settings="station" data-permission="ManageSettings">Station settings</button>
-      <button type="button" id="logoutButton">Sign out</button>
-    </div>
-
-    <div class="modal" id="settingsDialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
-      <div class="modal__backdrop" data-close-modal></div>
-      <section class="modal__panel settings-panel">
-        <header>
-          <div><span class="eyebrow">ADMINISTRATION</span><h2 id="settingsTitle">Settings</h2></div>
-          <button class="dialog-close" type="button" data-close-modal aria-label="Close settings">×</button>
-        </header>
-        <nav class="settings-tabs" id="settingsTabs">
-          <button type="button" data-tab="account">My account</button>
-          <button type="button" data-tab="users" data-permission="ManageUsers">Users</button>
-          <button type="button" data-tab="roles">Roles &amp; permissions</button>
-          <button type="button" data-tab="station" data-permission="ManageSettings">Station &amp; data</button>
-        </nav>
-        <div class="settings-body" id="settingsBody"></div>
-      </section>
     </div>
 
     <div class="modal" id="learnDialog" role="dialog" aria-modal="true" aria-labelledby="learnTitle" hidden>
@@ -319,6 +328,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
     <script src="auth.js"></script>
+    <script src="views.js"></script>
     <script src="camera-sources.js"></script>
     <script src="inspection.js"></script>
   </body>
