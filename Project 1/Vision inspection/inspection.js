@@ -81,7 +81,7 @@ const TOOLS = {
       options: (step) => [['anyEnrolled', 'Any enrolled person is recognised'], ['anyFace', 'Any face is present'],
         ...(step.reference?.people || []).map((p) => [`person:${p.name}`, `${p.name} is recognised`])],
     }],
-    defaults: { expected: 'anyEnrolled' }, criteria: { min: 50, max: 100 },
+    defaults: { expected: 'anyEnrolled' }, criteria: { min: 45, max: 100 },
   },
   contrast: {
     label: 'Surface contrast', group: 'Defect', icon: '≋', unit: 'σ', digits: 1,
@@ -277,7 +277,7 @@ function colorName(r, g, b) {
 /* ---------- Face recognition (loaded on first use) ---------- */
 
 let faceApiReady = null;
-let gpuMisses = 0; // times the GPU found no face but the CPU did
+let gpuVerified = false; // GPU result cross-checked on the CPU once this session
 const FACE_DETECT_PASSES = [
   { inputSize: 416, scoreThreshold: 0.5 },
   { inputSize: 608, scoreThreshold: 0.4 },
@@ -343,15 +343,16 @@ async function detectFaces(acquired, rect) {
   };
   let faces = await detect();
   let engine = faceapi.tf.getBackend() === 'webgl' ? 'GPU' : 'CPU';
-  // Some GPU drivers intermittently return no detections on WebGL. Never report "no face"
-  // from the GPU alone: confirm on the CPU, and stay on the CPU once the GPU has missed twice.
-  if (!faces.length && engine === 'GPU') {
+  // Some GPU drivers return no detections on WebGL. The first time the GPU finds no face,
+  // cross-check once on the CPU (several seconds): if the CPU finds a face the GPU is unreliable
+  // and the CPU is used from then on; otherwise the GPU is trusted for the rest of the session.
+  if (!faces.length && engine === 'GPU' && !gpuVerified) {
+    gpuVerified = true;
     await faceapi.tf.setBackend('cpu');
     await faceapi.tf.ready();
     faces = await detect();
     engine = 'CPU check';
-    if (faces.length) gpuMisses += 1;
-    if (faces.length && gpuMisses >= 2) {
+    if (faces.length) {
       showToast('Face detection switched to CPU mode: the graphics driver missed faces (slower but reliable).');
     } else {
       await faceapi.tf.setBackend('webgl');
@@ -362,6 +363,8 @@ async function detectFaces(acquired, rect) {
     const box = f.detection.box;
     return {
       descriptor: f.descriptor,
+      score: f.detection.score,
+      sizePx: box.width, // face width in the high-resolution view
       // Face box as a fraction of the camera view, for the overlay.
       box: {
         x: (rect.x + box.x / HIRES_SCALE) / ANALYSIS_WIDTH,
@@ -375,15 +378,17 @@ async function detectFaces(acquired, rect) {
   return result;
 }
 
+// Confidence = (1 − descriptor distance) × 100. The face-api.js model separates people at a
+// distance of about 0.55–0.6, i.e. 40–45% confidence.
+const AMBIGUITY_MARGIN = 6; // % points: closer than this to a second person → Unknown
+
 function bestMatch(descriptor, people) {
-  let best = { name: 'Unknown', confidence: 0 };
-  people.forEach((person) => {
-    person.descriptors.forEach((d) => {
-      const confidence = Math.max(0, 1 - faceapi.euclideanDistance(descriptor, d)) * 100;
-      if (confidence > best.confidence) best = { name: person.name, confidence };
-    });
-  });
-  return best;
+  const scores = people.map((person) => ({
+    name: person.name,
+    confidence: Math.max(0, ...person.descriptors.map((d) => (1 - faceapi.euclideanDistance(descriptor, d)) * 100)),
+  })).sort((a, b) => b.confidence - a.confidence);
+  const [best = { name: 'Unknown', confidence: 0 }, second] = scores;
+  return { ...best, ambiguous: Boolean(second && best.confidence - second.confidence < AMBIGUITY_MARGIN) };
 }
 
 /* ---------- Pixel helpers ---------- */
@@ -562,7 +567,7 @@ const RUNNERS = {
     const minimum = step.criteria.min;
     const named = faces.map((face) => {
       const match = people.length ? bestMatch(face.descriptor, people) : { name: 'Unknown', confidence: 0 };
-      const recognised = match.confidence >= minimum;
+      const recognised = match.confidence >= minimum && !match.ambiguous;
       return { box: face.box, name: recognised ? match.name : 'Unknown', confidence: match.confidence, recognised };
     });
     let value;
@@ -956,6 +961,7 @@ function addStep(toolKey) {
   pgm.selectedId = step.id;
   markDirty();
   renderEditor();
+  if (tool.enroll) preloadFaceModels();
   if (tool.enroll) {
     const nameInput = pe.editor.querySelector('#enrollName');
     nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1010,6 +1016,8 @@ async function enrollOnce(presetName) {
       throw new Error(`${faces.length} faces of similar size found; only the person being enrolled should be in the ROI.`);
     }
     const face = faces[0];
+    if (face.sizePx < 90) throw new Error('Face too small for a good sample. Move closer so your face fills more of the view.');
+    if (face.score < 0.6) throw new Error('Face not clear enough for a good sample. Face the camera directly with good, even lighting.');
     step.reference ||= { people: [] };
     step.reference.people ||= [];
     let person = step.reference.people.find((p) => p.name.toLowerCase() === name.toLowerCase());
@@ -1028,6 +1036,8 @@ async function enrollOnce(presetName) {
   } catch (error) {
     showToast(`Enroll failed: ${error.message}`, 'error');
     renderEditor();
+    // Keep the typed name so the person can simply try again.
+    if (!presetName) pe.editor.querySelector('#enrollName').value = name;
   }
 }
 
@@ -1288,6 +1298,14 @@ async function initProgram() {
   pgm.approved = clone(pgm.program);
   pgm.selectedId = pgm.program.steps[0]?.id ?? null;
   renderAll();
+  preloadFaceModels();
+}
+
+// Loading and warming up the face models takes several seconds; do it in the background
+// when the recipe uses Face ID so the first inspection is not delayed.
+function preloadFaceModels() {
+  if (!pgm.program.steps.some((step) => step.tool === 'faceId' && step.enabled)) return;
+  loadFaceApi().then(() => showToast('Face recognition ready.')).catch(() => { /* reported when a Face ID step runs */ });
 }
 
 initProgram();
