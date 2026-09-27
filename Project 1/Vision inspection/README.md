@@ -31,6 +31,8 @@ Open `index.html` in a modern browser, or serve the folder with any static web s
 
 The product requirements and production-safety constraints are documented in `intent.md`.
 
+The **[system map](docs/system-map.html)** shows the architecture (browser console, camera gateway, AI models, storage, planned PLC/database integration), the inspection cycle with its ERROR/FAIL/drift paths, the recipe approval workflow, where machine learning is used, the console views, and roles and permissions. Online: [system map](https://prabugandhi1977.github.io/vision-inspection/Project%201/Vision%20inspection/docs/system-map.html).
+
 ## Inspection program (tools and criteria)
 
 The **Inspection program** section configures what is inspected and how each result is judged. It follows the job structure used by industrial vision systems such as Cognex In-Sight (EasyBuilder), Keyence CV-X, and Omron FH:

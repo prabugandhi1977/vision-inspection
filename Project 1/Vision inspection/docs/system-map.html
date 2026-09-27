@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>VisionForge System Map</title>
+<style>body { margin: 0; } img { max-width: 100%; }</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f3f6f5;
+    --surface: #ffffff;
+    --chip: #eaf3f0;
+    --ink: #16303c;
+    --muted: #5d7480;
+    --line: #c9d6d5;
+    --accent: #13806d;
+    --accent-soft: #dff2ec;
+    --warn: #a86a1e;
+    --fail: #c0514a;
+    --sans: "Manrope", "Segoe UI", Arial, sans-serif;
+    --mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0b1821; --surface: #112330; --chip: #16303b; --ink: #e2ecee; --muted: #93a9b1;
+      --line: #2b4452; --accent: #43c6a7; --accent-soft: #143a33; --warn: #e2a65a; --fail: #ef7f75;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0b1821; --surface: #112330; --chip: #16303b; --ink: #e2ecee; --muted: #93a9b1;
+    --line: #2b4452; --accent: #43c6a7; --accent-soft: #143a33; --warn: #e2a65a; --fail: #ef7f75;
+  }
+
+  body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--sans); padding-inline: 16px; }
+  .page { margin: 0 auto; max-width: 1080px; padding-block: 40px 64px; display: grid; gap: 48px; }
+  header { display: grid; gap: 10px; }
+  .eyebrow { color: var(--accent); font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+  h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin: 0; text-wrap: balance; }
+  h2 { font-size: 21px; font-weight: 800; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  p { margin: 0; max-width: 68ch; }
+  .lede { color: var(--muted); font-size: 16px; }
+  .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 20px; font: 12px var(--mono); }
+  .meta a { color: var(--accent); }
+  section { display: grid; gap: 14px; }
+  .section-head { display: grid; gap: 6px; }
+  .section-head p { color: var(--muted); }
+
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 12px; }
+  .scroll { overflow-x: auto; }
+  figcaption { color: var(--muted); font-size: 13px; max-width: 80ch; }
+  figcaption b { color: var(--ink); }
+
+  /* Diagram styling (page CSS; the SVGs carry classes only) */
+  svg.diagram { color: var(--muted); display: block; height: auto; max-width: 100%; }
+  svg.wide { min-width: 760px; }
+  .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.3; }
+  .box.accent { stroke: var(--accent); stroke-width: 1.8; }
+  .box.warn { stroke: var(--warn); stroke-width: 1.8; }
+  .box.fail { stroke: var(--fail); stroke-width: 1.6; stroke-dasharray: 5 4; }
+  .box.planned { fill: none; stroke: var(--muted); stroke-dasharray: 6 5; }
+  .zone { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 4; }
+  .chip { fill: var(--chip); stroke: none; }
+  .t { fill: var(--ink); font: 700 13px var(--sans); }
+  .t.zone-title { fill: var(--accent); font: 500 11px var(--mono); letter-spacing: .08em; }
+  .s { fill: var(--muted); font: 11px var(--mono); }
+  .edge { fill: none; stroke: currentColor; stroke-width: 1.4; }
+  .edge.dashed { stroke-dasharray: 5 4; }
+  .edge.accent { stroke: var(--accent); }
+  .edge.fail { stroke: var(--fail); }
+  .edge.warn { stroke: var(--warn); }
+  .lbl { fill: var(--muted); font: 11px var(--mono); }
+  .lbl.fail { fill: var(--fail); }
+  .lbl.warn { fill: var(--warn); }
+  .lbl.accent { fill: var(--accent); }
+  .status-fail { fill: var(--fail); font: 700 13px var(--sans); }
+  .status-warn { fill: var(--warn); font: 700 13px var(--sans); }
+  .status-ok { fill: var(--accent); font: 700 13px var(--sans); }
+
+  table { border-collapse: collapse; min-width: 640px; width: 100%; font-size: 13px; }
+  th { color: var(--muted); font: 500 11px var(--mono); letter-spacing: .06em; text-align: left; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  td { border-bottom: 1px solid var(--line); padding: 10px 12px; vertical-align: top; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  td code, p code { font: 12px var(--mono); background: var(--chip); padding: 1px 5px; border-radius: 3px; }
+  .matrix td { text-align: center; }
+  .matrix td:first-child { text-align: left; font: 500 12px var(--mono); }
+  .yes { color: var(--accent); font-weight: 800; }
+  .table-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+
+  .gaps { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .gap { background: var(--surface); border: 1px dashed var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; }
+  .gap strong { font-size: 14px; }
+  .gap span { color: var(--muted); font-size: 13px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+</head>
+<body>
+<main class="page">
+  <header>
+    <span class="eyebrow">Vision inspection · browser prototype</span>
+    <h1>VisionForge System Map</h1>
+    <p class="lede">How the VisionForge inspection station is built and how work moves through it: where images come from, how each inspection is judged, how recipe changes are approved, and where machine learning sits. The console runs in the operator's browser; smart and IP cameras connect through a small gateway on the station PC; the dashed parts are the planned production integration from <code>intent.md</code>.</p>
+    <div class="meta">
+      <span>Demo: <a href="https://prabugandhi1977.github.io/vision-inspection/Project%201/Vision%20inspection/" target="_blank" rel="noopener">github.io/vision-inspection</a></span>
+      <span>Code: <a href="https://github.com/prabugandhi1977/vision-inspection" target="_blank" rel="noopener">prabugandhi1977/vision-inspection</a></span>
+      <span>As of 27 Sep 2026 · includes PR #14</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="arch">
+    <div class="section-head">
+      <h2 id="arch">System architecture</h2>
+      <p>The console is one page of scripts: dashboard and camera sources, sign-in and navigation, and the inspection engine. Smart and IP cameras reach it through the camera gateway on the station PC. Models load from the CDN or ship with the site, and all state lives in browser storage.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="diagram wide" viewBox="0 0 980 612" role="img" aria-label="Architecture: the operator and a web or phone camera feed the dashboard in the browser; smart and IP cameras feed frames through the camera gateway on the station PC; the inspection engine checks permissions, runs AI models loaded from jsDelivr or bundled with the site, and saves recipes and audit to browser storage. PLC, database and server-side sign-in are planned.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" /></marker>
+          </defs>
+
+          <!-- Outside: devices and people -->
+          <rect class="box" x="20" y="88" width="120" height="60" rx="6" />
+          <text class="t" x="80" y="113" text-anchor="middle">Operator</text>
+          <text class="s" x="80" y="131" text-anchor="middle">signed-in user</text>
+          <rect class="box" x="20" y="196" width="120" height="60" rx="6" />
+          <text class="t" x="80" y="221" text-anchor="middle">Web / phone cam</text>
+          <text class="s" x="80" y="239" text-anchor="middle">USB · rear lens</text>
+
+          <!-- Browser zone -->
+          <rect class="zone" x="170" y="40" width="540" height="430" rx="10" />
+          <text class="t zone-title" x="186" y="62">OPERATOR'S BROWSER · ALL PROCESSING RUNS HERE</text>
+
+          <rect class="box" x="190" y="80" width="240" height="76" rx="6" />
+          <text class="t" x="206" y="108">Camera &amp; dashboard</text>
+          <text class="s" x="206" y="128">app.js · camera-sources.js</text>
+          <text class="s" x="206" y="144">stream, capture, gateway</text>
+
+          <rect class="box" x="450" y="80" width="240" height="76" rx="6" />
+          <text class="t" x="466" y="108">Sign-in &amp; navigation</text>
+          <text class="s" x="466" y="128">auth.js · views.js</text>
+          <text class="s" x="466" y="144">roles, sessions, views</text>
+
+          <rect class="box accent" x="190" y="196" width="500" height="150" rx="6" />
+          <text class="t" x="206" y="220">Inspection engine</text>
+          <text class="s" x="336" y="220">inspection.js</text>
+          <rect class="chip" x="206" y="236" width="100" height="34" rx="4" /><text class="t" x="256" y="258" text-anchor="middle">Acquire</text>
+          <rect class="chip" x="326" y="236" width="100" height="34" rx="4" /><text class="t" x="376" y="258" text-anchor="middle">Locate</text>
+          <rect class="chip" x="446" y="236" width="100" height="34" rx="4" /><text class="t" x="496" y="258" text-anchor="middle">Run tools</text>
+          <rect class="chip" x="566" y="236" width="100" height="34" rx="4" /><text class="t" x="616" y="258" text-anchor="middle">Judge</text>
+          <line class="edge" x1="306" y1="253" x2="324" y2="253" marker-end="url(#a1)" />
+          <line class="edge" x1="426" y1="253" x2="444" y2="253" marker-end="url(#a1)" />
+          <line class="edge" x1="546" y1="253" x2="564" y2="253" marker-end="url(#a1)" />
+          <rect class="box" x="206" y="286" width="230" height="44" rx="4" />
+          <text class="t" x="218" y="304">AI anomaly</text>
+          <text class="s" x="218" y="320">TF.js · MobileNetV2</text>
+          <rect class="box" x="446" y="286" width="230" height="44" rx="4" />
+          <text class="t" x="458" y="304">Face ID</text>
+          <text class="s" x="458" y="320">face-api · SSD + 128-D</text>
+
+          <rect class="box" x="190" y="386" width="500" height="66" rx="6" />
+          <text class="t" x="206" y="408">Browser storage (localStorage)</text>
+          <text class="s" x="206" y="426">recipe versions · pending change · audit trail</text>
+          <text class="s" x="206" y="442">users &amp; password hashes · session · AI samples · faces</text>
+
+          <!-- Served from -->
+          <rect class="box" x="770" y="80" width="190" height="76" rx="6" />
+          <text class="t" x="786" y="108">GitHub Pages</text>
+          <text class="s" x="786" y="128">HTML · JS · CSS</text>
+          <text class="s" x="786" y="144">MobileNetV2 1.6 MB</text>
+          <rect class="box" x="770" y="206" width="190" height="90" rx="6" />
+          <text class="t" x="786" y="234">jsDelivr CDN</text>
+          <text class="s" x="786" y="254">face-api.js + models</text>
+          <text class="s" x="786" y="270">~12 MB · TensorFlow.js</text>
+          <rect class="box accent" x="770" y="316" width="190" height="76" rx="6" />
+          <text class="t" x="786" y="342">Camera gateway</text>
+          <text class="s" x="786" y="362">this PC · node gateway.js</text>
+          <text class="s" x="786" y="378">one API for all cameras</text>
+          <rect class="box" x="770" y="420" width="190" height="52" rx="6" />
+          <text class="t" x="786" y="442">Smart / IP cameras</text>
+          <text class="s" x="786" y="460">Cognex · Hikvision · IP</text>
+
+          <!-- Edges -->
+          <line class="edge" x1="140" y1="118" x2="188" y2="118" marker-end="url(#a1)" />
+          <text class="lbl" x="164" y="110" text-anchor="middle">uses</text>
+          <polyline class="edge" points="140,226 158,226 158,140 188,140" marker-end="url(#a1)" />
+          <text class="lbl" x="150" y="176" text-anchor="end">video stream</text>
+          <line class="edge" x1="310" y1="156" x2="310" y2="194" marker-end="url(#a1)" />
+          <text class="lbl" x="318" y="180">frame</text>
+          <line class="edge" x1="570" y1="156" x2="570" y2="194" marker-end="url(#a1)" />
+          <text class="lbl" x="578" y="180">can(permission)</text>
+          <line class="edge" x1="440" y1="348" x2="440" y2="384" marker-start="url(#a1)" marker-end="url(#a1)" />
+          <text class="lbl" x="448" y="370">save / load</text>
+          <line class="edge" x1="770" y1="118" x2="712" y2="118" marker-end="url(#a1)" />
+          <text class="lbl" x="741" y="110" text-anchor="middle">files</text>
+          <line class="edge accent" x1="770" y1="250" x2="692" y2="250" marker-end="url(#a1)" />
+          <text class="lbl accent" x="731" y="242" text-anchor="middle">first use</text>
+          <line class="edge accent" x1="770" y1="334" x2="692" y2="334" marker-end="url(#a1)" />
+          <text class="lbl accent" x="731" y="326" text-anchor="middle">frames</text>
+          <line class="edge" x1="865" y1="420" x2="865" y2="394" marker-end="url(#a1)" />
+          <text class="lbl" x="857" y="411" text-anchor="end">native protocols</text>
+
+          <!-- Planned production integration -->
+          <line class="edge dashed" x1="440" y1="470" x2="440" y2="498" marker-end="url(#a1)" />
+          <text class="lbl" x="448" y="488">planned</text>
+          <rect class="box planned" x="170" y="500" width="790" height="100" rx="10" />
+          <text class="t zone-title" x="186" y="522" style="fill: var(--muted)">PLANNED PRODUCTION INTEGRATION · NOT IN THE PROTOTYPE</text>
+          <rect class="box" x="186" y="534" width="240" height="54" rx="4" />
+          <text class="t" x="200" y="556">PLC</text>
+          <text class="s" x="200" y="574">trigger · busy · PASS/FAIL</text>
+          <rect class="box" x="444" y="534" width="240" height="54" rx="4" />
+          <text class="t" x="458" y="556">Server-side sign-in</text>
+          <text class="s" x="458" y="574">identity service · trusted audit</text>
+          <rect class="box" x="702" y="534" width="242" height="54" rx="4" />
+          <text class="t" x="716" y="556">Database + image store</text>
+          <text class="s" x="716" y="574">retention PASS 7 d / FAIL 90 d</text>
+        </svg>
+      </div>
+      <figcaption><b>Images stay on the station.</b> GitHub Pages only serves static files; the camera gateway runs on the station PC (listening on 127.0.0.1) and speaks each camera's own protocol — Cognex Native Mode, HTTP snapshots with digest login, RTSP via ffmpeg, or FTP image folders. The AI models are the only large downloads: face models (~12 MB) come from jsDelivr on first use, MobileNetV2 ships with the site. Sign-in reads users and the session from browser storage, which is why it demonstrates the workflow but is not real security.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="cycle">
+    <div class="section-head">
+      <h2 id="cycle">Inspection cycle</h2>
+      <p>One inspection, from the Inspect button (a PLC trigger in production) to the recorded result. The top row is the normal path; the second row shows what each stage does when something is wrong.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="diagram wide" viewBox="0 0 1080 356" role="img" aria-label="Inspection cycle: Inspect, acquire image, locate part, run each step, judge against limits, overall result, then record. No frame gives ERROR; part not found fails and skips later steps; a bad ROI or untaught reference gives ERROR; passing values drifting from the learned mean are flagged.">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" /></marker>
+          </defs>
+          <!-- Main path: boxes 140 wide (Inspect 120, Judge 130, Overall 100) with 54 px gaps -->
+          <rect class="box" x="20" y="40" width="120" height="70" rx="6" />
+          <text class="t" x="80" y="70" text-anchor="middle">Inspect</text>
+          <text class="s" x="80" y="90" text-anchor="middle">button or PLC</text>
+          <rect class="box" x="194" y="40" width="140" height="70" rx="6" />
+          <text class="t" x="264" y="70" text-anchor="middle">Acquire image</text>
+          <text class="s" x="264" y="90" text-anchor="middle">captured/live/sim</text>
+          <rect class="box" x="388" y="40" width="140" height="70" rx="6" />
+          <text class="t" x="458" y="70" text-anchor="middle">Locate part</text>
+          <text class="s" x="458" y="90" text-anchor="middle">pattern, sub-pixel</text>
+          <rect class="box" x="582" y="40" width="140" height="70" rx="6" />
+          <text class="t" x="652" y="70" text-anchor="middle">Run each step</text>
+          <text class="s" x="652" y="90" text-anchor="middle">tool on its ROI</text>
+          <rect class="box" x="776" y="40" width="130" height="70" rx="6" />
+          <text class="t" x="841" y="70" text-anchor="middle">Judge</text>
+          <text class="s" x="841" y="90" text-anchor="middle">min ≤ value ≤ max</text>
+          <rect class="box accent" x="960" y="40" width="100" height="70" rx="6" />
+          <text class="t" x="1010" y="70" text-anchor="middle">Overall</text>
+          <text class="s" x="1010" y="90" text-anchor="middle">worst status</text>
+
+          <line class="edge" x1="140" y1="75" x2="192" y2="75" marker-end="url(#a2)" /><text class="lbl" x="166" y="67" text-anchor="middle">start</text>
+          <line class="edge" x1="334" y1="75" x2="386" y2="75" marker-end="url(#a2)" /><text class="lbl" x="360" y="67" text-anchor="middle">image</text>
+          <line class="edge" x1="528" y1="75" x2="580" y2="75" marker-end="url(#a2)" /><text class="lbl" x="554" y="67" text-anchor="middle">offset</text>
+          <line class="edge" x1="722" y1="75" x2="774" y2="75" marker-end="url(#a2)" /><text class="lbl" x="748" y="67" text-anchor="middle">value</text>
+          <line class="edge" x1="906" y1="75" x2="958" y2="75" marker-end="url(#a2)" /><text class="lbl" x="932" y="67" text-anchor="middle">status</text>
+
+          <!-- Exception outcomes -->
+          <line class="edge fail dashed" x1="264" y1="110" x2="264" y2="168" marker-end="url(#a2)" /><text class="lbl fail" x="272" y="144">no frame</text>
+          <rect class="box fail" x="194" y="170" width="140" height="60" rx="6" />
+          <text class="status-fail" x="264" y="196" text-anchor="middle">ERROR</text>
+          <text class="s" x="264" y="214" text-anchor="middle">never a silent PASS</text>
+
+          <line class="edge fail dashed" x1="458" y1="110" x2="458" y2="168" marker-end="url(#a2)" /><text class="lbl fail" x="466" y="144">not found</text>
+          <rect class="box fail" x="388" y="170" width="140" height="60" rx="6" />
+          <text class="status-fail" x="458" y="196" text-anchor="middle">FAIL</text>
+          <text class="s" x="458" y="214" text-anchor="middle">later steps SKIPPED</text>
+
+          <line class="edge fail dashed" x1="652" y1="110" x2="652" y2="168" marker-end="url(#a2)" /><text class="lbl fail" x="660" y="144">bad ROI</text>
+          <rect class="box fail" x="582" y="170" width="140" height="60" rx="6" />
+          <text class="status-fail" x="652" y="196" text-anchor="middle">ERROR</text>
+          <text class="s" x="652" y="214" text-anchor="middle">off-image/untaught</text>
+
+          <line class="edge warn dashed" x1="841" y1="110" x2="841" y2="168" marker-end="url(#a2)" /><text class="lbl warn" x="849" y="144">drifting</text>
+          <rect class="box warn" x="776" y="170" width="130" height="60" rx="6" />
+          <text class="status-warn" x="841" y="196" text-anchor="middle">PASS ⚠</text>
+          <text class="s" x="841" y="214" text-anchor="middle">2 in a row &gt; 2.5σ</text>
+
+          <!-- Record -->
+          <line class="edge accent" x1="1010" y1="110" x2="1010" y2="278" marker-end="url(#a2)" /><text class="lbl accent" x="1002" y="200" text-anchor="end">record</text>
+          <rect class="box accent" x="720" y="280" width="340" height="60" rx="6" />
+          <text class="t" x="736" y="305">Record the result</text>
+          <text class="s" x="736" y="324">result detail · traceability row · counters</text>
+        </svg>
+      </div>
+      <figcaption><b>Overall result = the worst step status:</b> any ERROR gives ERROR, otherwise any FAIL gives FAIL, otherwise PASS. Steps set to <i>Fixed in image</i> (Face ID, AI anomaly by default) still run when the part locator fails. Drift does not fail the part; it warns that a passing value is moving away from what was learned.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="recipe">
+    <div class="section-head">
+      <h2 id="recipe">Recipe change and approval</h2>
+      <p>Every change to tools, ROIs or limits is a draft until someone with <code>ApproveRecipe</code> accepts it. The approver of a submitted change must be a different person.</p>
+    </div>
+    <figure>
+      <div class="scroll">
+        <svg class="diagram wide" viewBox="0 0 820 290" role="img" aria-label="Recipe states: approved version, edited into a draft; the draft is discarded, saved and approved by a quality engineer, or submitted for approval; a pending change is approved by another user into a new version or rejected back to the current version.">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" /></marker>
+          </defs>
+          <rect class="box accent" x="30" y="120" width="150" height="60" rx="30" />
+          <text class="t" x="105" y="146" text-anchor="middle">Approved vN</text>
+          <text class="s" x="105" y="164" text-anchor="middle">active recipe</text>
+          <rect class="box" x="300" y="120" width="150" height="60" rx="30" />
+          <text class="t" x="375" y="146" text-anchor="middle">Draft</text>
+          <text class="s" x="375" y="164" text-anchor="middle">unsaved edits</text>
+          <rect class="box warn" x="620" y="40" width="170" height="60" rx="30" />
+          <text class="t" x="705" y="66" text-anchor="middle">Pending approval</text>
+          <text class="s" x="705" y="84" text-anchor="middle">submitted change</text>
+          <rect class="box accent" x="620" y="200" width="170" height="60" rx="30" />
+          <text class="t" x="705" y="226" text-anchor="middle">Approved vN+1</text>
+          <text class="s" x="705" y="244" text-anchor="middle">new active recipe</text>
+
+          <line class="edge" x1="180" y1="140" x2="298" y2="140" marker-end="url(#a3)" /><text class="lbl" x="239" y="132" text-anchor="middle">edit</text>
+          <line class="edge" x1="300" y1="164" x2="182" y2="164" marker-end="url(#a3)" /><text class="lbl" x="241" y="182" text-anchor="middle">discard</text>
+          <line class="edge warn" x1="444" y1="128" x2="618" y2="80" marker-end="url(#a3)" /><text class="lbl warn" x="520" y="96" text-anchor="middle">submit</text>
+          <line class="edge accent" x1="444" y1="172" x2="618" y2="222" marker-end="url(#a3)" /><text class="lbl accent" x="560" y="222" text-anchor="end">save &amp; approve</text>
+          <line class="edge accent" x1="705" y1="100" x2="705" y2="198" marker-end="url(#a3)" /><text class="lbl accent" x="697" y="154" text-anchor="end">approve · other user</text>
+          <polyline class="edge fail" points="660,40 660,22 105,22 105,118" marker-end="url(#a3)" /><text class="lbl fail" x="382" y="16" text-anchor="middle">reject + reason</text>
+        </svg>
+      </div>
+      <figcaption><b>Who takes which path:</b> a Production engineer can only <i>submit</i>; a Quality engineer or Administrator can <i>save &amp; approve</i> directly or approve someone else's submission. Every transition writes an audit entry with user, old → new version and reason. Learned limits enter the same way, as a draft.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="ml">
+    <div class="section-head">
+      <h2 id="ml">Where machine learning is used</h2>
+      <p>Three tools learn from examples instead of hand-set numbers. Each stores what it learned in the recipe, so it is versioned and approved with everything else.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Feature</th><th>You show it</th><th>It learns</th><th>At each inspection</th><th>Measured</th></tr></thead>
+        <tbody>
+          <tr><td>Learn limits</td><td>~20 good parts (setting)</td><td>Mean and spread of every measuring tool; proposes limits at mean ± 4σ for review</td><td>PASS/FAIL against the limits; drift warning when 2 in a row exceed 2.5σ</td><td>40 normal parts: 0 false drift alarms; a 4σ shift flagged on the 2nd part</td></tr>
+          <tr><td>AI anomaly</td><td>~20 good parts</td><td>MobileNetV2 patch features (tiled 14 × 14 grid), limit from leave-one-out scores</td><td>Score where 100 = edge of normal, plus a heatmap of where the part differs</td><td>20 learned: 20/20 good passed (43–91), 20/20 defects caught (132–441), ~85 ms</td></tr>
+          <tr><td>Face ID</td><td>Each person, 2–3 samples</td><td>SSD MobileNet detection → 68 landmarks → 128-number face signature</td><td>Nearest enrolled match ≥ 45% names the person, otherwise Unknown</td><td>90% of faces found under hard conditions (was 47%); ~0.1 s per inspection</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="views">
+    <div class="section-head">
+      <h2 id="views">Console views</h2>
+      <p>The console follows the Expense360 layout: a sidebar of tabs that each open one view, filtered by the signed-in role, and a top bar with the station, role, theme switch and Sign out.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>View</th><th>Link</th><th>Contents</th><th>Who sees it</th></tr></thead>
+        <tbody>
+          <tr><td>Overview</td><td><code>#overview</code></td><td>Line status, output, pass rate, rejects, cycle time, recent results, defect distribution</td><td>Everyone</td></tr>
+          <tr><td>Live inspection</td><td><code>#live</code></td><td>Camera view with step ROIs, Inspect / capture / simulate, result detail, camera configuration</td><td>RunInspection (camera setup: ConfigureCamera)</td></tr>
+          <tr><td>Inspection program</td><td><code>#program</code></td><td>Tool library, steps, step editor, learn limits, save or submit for approval</td><td>Everyone; editing needs ModifyRecipe</td></tr>
+          <tr><td>Audit log</td><td><code>#audit</code></td><td>Sign-ins, recipe submissions and approvals, camera, user and settings changes</td><td>ViewReports</td></tr>
+          <tr><td>Settings</td><td><code>#settings</code></td><td>My account; users, roles and station settings</td><td>Everyone; users and station need ManageUsers / ManageSettings</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="roles">
+    <div class="section-head">
+      <h2 id="roles">Roles and permissions</h2>
+      <p>Permissions are defined by function, as <code>intent.md</code> requires; each button in the app is enabled only when the signed-in role has its permission.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="matrix">
+        <thead><tr><th>Permission</th><th>Operator</th><th>Quality engineer</th><th>Production engineer</th><th>Administrator</th></tr></thead>
+        <tbody>
+          <tr><td>RunInspection</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>ViewReports</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>ModifyRecipe</td><td></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>ApproveRecipe</td><td></td><td class="yes">✓</td><td></td><td class="yes">✓</td></tr>
+          <tr><td>ConfigureCamera</td><td></td><td></td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>ManageUsers</td><td></td><td></td><td></td><td class="yes">✓</td></tr>
+          <tr><td>ManageSettings</td><td></td><td></td><td></td><td class="yes">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="next">
+    <div class="section-head">
+      <h2 id="next">From prototype to production</h2>
+      <p>What the prototype stands in for, and what replaces it on a real line.</p>
+    </div>
+    <div class="gaps">
+      <div class="gap"><strong>PLC interface</strong><span>Inspect button → hardware trigger, busy/complete, PASS/FAIL outputs and reject signal.</span></div>
+      <div class="gap"><strong>Native camera SDKs</strong><span>The camera gateway already covers Cognex, HTTP, RTSP and FTP cameras; GigE / USB3 cameras (HIKROBOT MVS, Basler pylon) need SDK adapters in the gateway.</span></div>
+      <div class="gap"><strong>Database and image store</strong><span>Browser storage → shared records and images with configurable retention (PASS 7 d, FAIL 90 d).</span></div>
+      <div class="gap"><strong>Server-side sign-in</strong><span>Browser-held users and hashes → a real identity service, so permissions and the audit trail can be trusted.</span></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
