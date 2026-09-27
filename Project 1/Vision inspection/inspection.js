@@ -278,6 +278,11 @@ function colorName(r, g, b) {
 
 let faceApiReady = null;
 let faceBackendChecked = false;
+const FACE_DETECT_PASSES = [
+  { inputSize: 416, scoreThreshold: 0.5 },
+  { inputSize: 608, scoreThreshold: 0.4 },
+  { inputSize: 800, scoreThreshold: 0.35 },
+];
 function loadFaceApi() {
   if (!faceApiReady) {
     showToast('Loading face recognition models (about 7 MB, first use only)…');
@@ -306,10 +311,19 @@ async function detectFaces(acquired, rect) {
   crop.width = rect.w * HIRES_SCALE;
   crop.height = rect.h * HIRES_SCALE;
   crop.getContext('2d').drawImage(acquired.hires(), rect.x * HIRES_SCALE, rect.y * HIRES_SCALE, crop.width, crop.height, 0, 0, crop.width, crop.height);
-  const detect = () => faceapi
-    .detectAllFaces(crop, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
-    .withFaceLandmarks(true)
-    .withFaceDescriptors();
+  // The detector resizes the whole ROI to `inputSize`, so small (distant) or turned faces can
+  // vanish at the fast setting. Only when nothing is found, retry at higher resolution and a
+  // slightly lower score threshold.
+  const detect = async () => {
+    for (const options of FACE_DETECT_PASSES) {
+      const found = await faceapi
+        .detectAllFaces(crop, new faceapi.TinyFaceDetectorOptions(options))
+        .withFaceLandmarks(true)
+        .withFaceDescriptors();
+      if (found.length) return found;
+    }
+    return [];
+  };
   let faces = await detect();
   // Some GPU/driver combinations make the WebGL backend return no detections at all.
   // The first time WebGL finds nothing, cross-check once on the CPU and keep whichever works.
@@ -779,9 +793,9 @@ function paramField(step, param) {
 function enrollFieldset(step) {
   const people = step.reference?.people || [];
   return `<fieldset><legend>Enrolled people</legend>
-    <ul class="people">${people.map((p) => `<li><span>${escapeHtml(p.name)} <small>${p.descriptors.length} sample${p.descriptors.length === 1 ? '' : 's'}</small></span><button type="button" class="danger-link" data-edit="unenroll" data-name="${escapeHtml(p.name)}">Remove</button></li>`).join('') || '<li class="empty">No one enrolled yet.</li>'}</ul>
+    <ul class="people">${people.map((p) => `<li><span>${escapeHtml(p.name)} <small>${p.descriptors.length} sample${p.descriptors.length === 1 ? '' : 's'}</small></span><span class="person-actions"><button type="button" class="text-button" data-edit="enroll" data-name="${escapeHtml(p.name)}">+ Sample</button><button type="button" class="danger-link" data-edit="unenroll" data-name="${escapeHtml(p.name)}">Remove</button></span></li>`).join('') || '<li class="empty">No one enrolled yet.</li>'}</ul>
     <div class="enroll-row"><input type="text" id="enrollName" placeholder="Person name" maxlength="30" aria-label="Person name" /><button type="button" class="secondary-button" data-edit="enroll">Enroll face</button></div>
-    <small class="field-hint">Face the camera alone inside the ROI, then enroll. Enroll 2–3 samples per person (slightly different angles) for reliable recognition. Only a numeric face signature is stored, not the image.</small>
+    <small class="field-hint">Type a new person’s name and select Enroll face. Use + Sample to add 2–3 samples per person (slightly different angles) for reliable recognition. If several people are in view, the closest face is enrolled. Only a numeric face signature is stored, not the image.</small>
   </fieldset>`;
 }
 
@@ -931,29 +945,42 @@ async function teachSelected() {
   }
 }
 
-async function enrollSelected() {
+// Enrolls a face sample for `presetName` (the "+ Sample" button) or the name typed in the field.
+async function enrollSelected(presetName) {
   const step = stepById(pgm.selectedId);
   const input = pe.editor.querySelector('#enrollName');
-  const name = input.value.trim();
+  const name = (presetName || input.value).trim();
   if (!name) { input.focus(); showToast('Enter the person’s name before enrolling.', 'error'); return; }
-  const button = pe.editor.querySelector('[data-edit="enroll"]');
-  button.disabled = true;
-  button.textContent = 'Enrolling…';
+  pe.editor.querySelectorAll('[data-edit="enroll"]').forEach((b) => { b.disabled = true; });
+  const button = presetName ? pe.editor.querySelector(`[data-edit="enroll"][data-name="${CSS.escape(presetName)}"]`) : pe.editor.querySelector('.enroll-row [data-edit="enroll"]');
+  if (button) button.textContent = 'Enrolling…';
   try {
     const acquired = await acquireImage();
+    if (acquired.source === 'SIMULATION') throw new Error('The camera is not connected. Select Configure camera → Connect camera first.');
     const rect = roiRect(step.roi);
     if (rect.w < 4 || rect.h < 4) throw new Error('ROI is outside the image.');
-    const faces = await detectFaces(acquired, rect);
-    if (faces.length !== 1) throw new Error(faces.length ? `${faces.length} faces found; only the person being enrolled may be in the ROI.` : 'No face found in the ROI. Face the camera and try again.');
+    const faces = (await detectFaces(acquired, rect)).sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h);
+    if (!faces.length) throw new Error('No face found in the ROI. Face the camera, move a little closer, and make sure your face is well lit.');
+    // With several people in view, enroll the clearly closest (largest) face; refuse when it is ambiguous.
+    if (faces.length > 1 && faces[0].box.w * faces[0].box.h < 2 * faces[1].box.w * faces[1].box.h) {
+      throw new Error(`${faces.length} faces of similar size found; only the person being enrolled should be in the ROI.`);
+    }
+    const face = faces[0];
     step.reference ||= { people: [] };
     step.reference.people ||= [];
     let person = step.reference.people.find((p) => p.name.toLowerCase() === name.toLowerCase());
     if (!person) { person = { name, descriptors: [] }; step.reference.people.push(person); }
-    person.descriptors.push(Array.from(faces[0].descriptor, (v) => Number(v.toFixed(5))));
+    person.descriptors.push(Array.from(face.descriptor, (v) => Number(v.toFixed(5))));
     step.reference.taughtAt = new Date().toISOString();
     markDirty();
+    // Show which face was enrolled on the camera view.
+    pgm.lastResults[step.id] = { status: 'PASS', value: 100, label: `Enrolled ${person.name}`, text: 'Enrolled face sample', faces: [{ box: face.box, name: person.name, confidence: 100, recognised: true }] };
+    renderOverlay();
+    renderStepList();
     renderEditor();
-    showToast(`Enrolled ${person.name} (${person.descriptors.length} sample${person.descriptors.length === 1 ? '' : 's'}). Save a new version to keep it.`);
+    const n = person.descriptors.length;
+    const extra = faces.length > 1 ? ' (closest of several faces)' : '';
+    showToast(`Enrolled ${person.name}${extra}: ${n} sample${n === 1 ? '' : 's'}.${n < 3 ? ' Turn your head slightly and select + Sample to add another.' : ' Save a new version to keep it.'}`);
   } catch (error) {
     showToast(`Enroll failed: ${error.message}`, 'error');
     renderEditor();
@@ -1162,7 +1189,7 @@ pe.editor.addEventListener('click', (event) => {
   const action = button.dataset.edit;
   if (action === 'draw') startDrawing();
   if (action === 'teach') teachSelected();
-  if (action === 'enroll') enrollSelected();
+  if (action === 'enroll') enrollSelected(button.dataset.name);
   if (action === 'unenroll') {
     step.reference.people = step.reference.people.filter((p) => p.name !== button.dataset.name);
     if (step.params.expected === `person:${button.dataset.name}`) step.params.expected = 'anyEnrolled';
