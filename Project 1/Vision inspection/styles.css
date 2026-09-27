@@ -493,3 +493,30 @@ body.signed-out .app-shell { filter: none; visibility: hidden; }
 #auditList li { background: var(--surface-2); border-left-color: var(--accent); border-radius: var(--radius-sm); }
 .table-wrap table th { color: var(--ink-muted); }
 .recent-card td, .recent-card td strong { color: var(--ink); }
+
+/* ============================== COLLAPSIBLE SIDE MENU ============================== */
+.sidebar { transition: width .18s ease; }
+.brand-mini { display: none; font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; color: var(--ink); }
+.brand-mini em { font-style: normal; color: var(--accent); }
+.sidebar-foot { border-top: 1px solid var(--border); padding: 10px; flex: none; }
+.sidebar-toggle .toggle-chevron { transition: transform .18s ease; transform-origin: 9.5px 8px; }
+.app-shell.sidebar-collapsed .sidebar { width: 64px; }
+.app-shell.sidebar-collapsed .sidebar-brand { padding: 20px 0 16px; text-align: center; }
+.app-shell.sidebar-collapsed .brand { justify-content: center; }
+.app-shell.sidebar-collapsed .brand-mark, .app-shell.sidebar-collapsed .brand-tagline { display: none; }
+.app-shell.sidebar-collapsed .brand-mini { display: inline; }
+.app-shell.sidebar-collapsed .side-nav { padding: 10px 8px; }
+.app-shell.sidebar-collapsed .sidebar-foot { padding: 10px 8px; }
+.app-shell.sidebar-collapsed .tab-btn { justify-content: center; padding: 10px 0; gap: 0; }
+/* Labels are visually hidden but still read by screen readers. */
+.app-shell.sidebar-collapsed .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.app-shell.sidebar-collapsed .sidebar-toggle .toggle-chevron { transform: scaleX(-1); }
+.tab-btn { position: relative; }
+@media (max-width: 860px) {
+  .sidebar-foot { display: none; }
+  .app-shell.sidebar-collapsed .sidebar { width: 100%; }
+  .app-shell.sidebar-collapsed .brand-mark { display: inline; }
+  .app-shell.sidebar-collapsed .brand-mini { display: none; }
+  .app-shell.sidebar-collapsed .tab-btn { padding: 10px 11px; gap: 10px; }
+  .app-shell.sidebar-collapsed .tab-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+}
