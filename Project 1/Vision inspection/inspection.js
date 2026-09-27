@@ -277,12 +277,29 @@ function colorName(r, g, b) {
 /* ---------- Face recognition (loaded on first use) ---------- */
 
 let faceApiReady = null;
-let faceBackendChecked = false;
+let gpuMisses = 0; // times the GPU found no face but the CPU did
 const FACE_DETECT_PASSES = [
   { inputSize: 416, scoreThreshold: 0.5 },
   { inputSize: 608, scoreThreshold: 0.4 },
   { inputSize: 800, scoreThreshold: 0.35 },
 ];
+// On WebGL the first inference at each input size can return wrong results (no face, or a
+// descriptor that matches nobody) while shaders compile. Run every network at every input
+// size used before the first real detection.
+async function warmUpFaceModels() {
+  const blank = document.createElement('canvas');
+  blank.width = 160;
+  blank.height = 160;
+  const ctx = blank.getContext('2d');
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, 160, 160);
+  for (let round = 0; round < 2; round += 1) {
+    for (const options of FACE_DETECT_PASSES) await faceapi.detectAllFaces(blank, new faceapi.TinyFaceDetectorOptions(options));
+    await faceapi.detectFaceLandmarksTiny(blank);
+    await faceapi.computeFaceDescriptor(blank);
+  }
+}
+
 function loadFaceApi() {
   if (!faceApiReady) {
     showToast('Loading face recognition models (about 7 MB, first use only)…');
@@ -299,7 +316,7 @@ function loadFaceApi() {
         faceapi.nets.faceLandmark68TinyNet.loadFromUri(url),
         faceapi.nets.faceRecognitionNet.loadFromUri(url),
       ]);
-    });
+    }).then(warmUpFaceModels);
     faceApiReady.catch(() => { faceApiReady = null; });
   }
   return faceApiReady;
@@ -325,17 +342,23 @@ async function detectFaces(acquired, rect) {
     return [];
   };
   let faces = await detect();
-  // Some GPU/driver combinations make the WebGL backend return no detections at all.
-  // The first time WebGL finds nothing, cross-check once on the CPU and keep whichever works.
-  if (!faces.length && !faceBackendChecked && faceapi.tf.getBackend() === 'webgl') {
-    faceBackendChecked = true;
+  let engine = faceapi.tf.getBackend() === 'webgl' ? 'GPU' : 'CPU';
+  // Some GPU drivers intermittently return no detections on WebGL. Never report "no face"
+  // from the GPU alone: confirm on the CPU, and stay on the CPU once the GPU has missed twice.
+  if (!faces.length && engine === 'GPU') {
     await faceapi.tf.setBackend('cpu');
     await faceapi.tf.ready();
     faces = await detect();
-    if (faces.length) showToast('Face detection switched to CPU mode for this graphics driver (slower but reliable).');
-    else { await faceapi.tf.setBackend('webgl'); await faceapi.tf.ready(); }
+    engine = 'CPU check';
+    if (faces.length) gpuMisses += 1;
+    if (faces.length && gpuMisses >= 2) {
+      showToast('Face detection switched to CPU mode: the graphics driver missed faces (slower but reliable).');
+    } else {
+      await faceapi.tf.setBackend('webgl');
+      await faceapi.tf.ready();
+    }
   }
-  return faces.map((f) => {
+  const result = faces.map((f) => {
     const box = f.detection.box;
     return {
       descriptor: f.descriptor,
@@ -348,6 +371,8 @@ async function detectFaces(acquired, rect) {
       },
     };
   });
+  result.engine = engine;
+  return result;
 }
 
 function bestMatch(descriptor, people) {
@@ -533,7 +558,7 @@ const RUNNERS = {
     const expected = step.params.expected;
     if (expected !== 'anyFace' && !people.length) return { error: 'No one is enrolled. Enter a name and select Enroll face.' };
     const faces = await detectFaces(acquired, rect);
-    if (!faces.length) return { value: 0, label: 'No face', text: 'No face detected in the ROI', faces: [] };
+    if (!faces.length) return { value: 0, label: 'No face', text: `No face detected in the ROI (${faces.engine})`, faces: [] };
     const minimum = step.criteria.min;
     const named = faces.map((face) => {
       const match = people.length ? bestMatch(face.descriptor, people) : { name: 'Unknown', confidence: 0 };
@@ -547,7 +572,7 @@ const RUNNERS = {
       value = Math.max(0, ...named.filter((f) => f.name === wanted).map((f) => f.confidence));
     } else value = Math.max(0, ...named.filter((f) => f.recognised).map((f) => f.confidence));
     const label = named.map((f) => (f.recognised ? `${f.name} ${f.confidence.toFixed(0)}%` : 'Unknown')).join(', ');
-    return { value, label, text: `${faces.length} face${faces.length === 1 ? '' : 's'}: ${label}`, faces: named };
+    return { value, label, text: `${faces.length} face${faces.length === 1 ? '' : 's'}: ${label} (${faces.engine})`, faces: named };
   },
 
   pattern(image, rect, step) {
@@ -624,7 +649,24 @@ function resultLabel(step, result) {
   return result.status;
 }
 
-async function runProgram({ record = true } = {}) {
+// One inspection or enrollment at a time: overlapping runs would share the detector and
+// could switch its GPU/CPU backend mid-run.
+let busy = false;
+async function exclusive(task) {
+  if (busy) { showToast('Still working on the previous inspection. Please wait.'); return null; }
+  busy = true;
+  [pe.inspect, pe.run].forEach((button) => { button.disabled = true; });
+  try {
+    return await task();
+  } finally {
+    busy = false;
+    [pe.inspect, pe.run].forEach((button) => { button.disabled = false; });
+  }
+}
+
+const runProgram = (options) => exclusive(() => runProgramOnce(options));
+
+async function runProgramOnce({ record = true } = {}) {
   const started = performance.now();
   const results = {};
   let overall = 'PASS';
@@ -946,7 +988,9 @@ async function teachSelected() {
 }
 
 // Enrolls a face sample for `presetName` (the "+ Sample" button) or the name typed in the field.
-async function enrollSelected(presetName) {
+const enrollSelected = (presetName) => exclusive(() => enrollOnce(presetName));
+
+async function enrollOnce(presetName) {
   const step = stepById(pgm.selectedId);
   const input = pe.editor.querySelector('#enrollName');
   const name = (presetName || input.value).trim();
