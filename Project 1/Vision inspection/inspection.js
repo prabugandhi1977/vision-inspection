@@ -871,12 +871,22 @@ function markDirty() {
 function addStep(toolKey) {
   const tool = TOOLS[toolKey];
   const count = pgm.program.steps.filter((s) => s.tool === toolKey).length + 1;
-  const step = makeStep(toolKey, `${tool.label} ${count}`, { x: 0.40, y: 0.35, w: 0.20, h: 0.30 });
+  // Face ID looks at the whole view by default; other tools start with a central ROI to be redrawn.
+  const roi = tool.enroll ? { x: 0, y: 0, w: 1, h: 1 } : { x: 0.40, y: 0.35, w: 0.20, h: 0.30 };
+  const step = makeStep(toolKey, `${tool.label} ${count}`, roi);
   pgm.program.steps.push(step);
   pgm.selectedId = step.id;
   markDirty();
   renderEditor();
-  showToast(`${tool.label} added. Draw its ROI on the image, then set the pass criteria.`);
+  if (tool.enroll) {
+    const nameInput = pe.editor.querySelector('#enrollName');
+    nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    nameInput.focus({ preventScroll: true });
+    showToast(`${tool.label} added. Type a name under Enrolled people, face the camera, and select Enroll face.`);
+  } else {
+    pe.editor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    showToast(`${tool.label} added. Draw its ROI on the image, then set the pass criteria.`);
+  }
 }
 
 function selectStep(id) {
