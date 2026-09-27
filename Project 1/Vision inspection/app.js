@@ -135,8 +135,27 @@ function describeCameraError(error) {
 }
 
 async function requestCameraStream(deviceId) {
-  const video = deviceId ? { deviceId: { exact: deviceId } } : true;
+  const video = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  if (deviceId) video.deviceId = { exact: deviceId };
   return navigator.mediaDevices.getUserMedia({ audio: false, video });
+}
+
+// Samples the live stream and reports whether it is delivering only black frames
+// (privacy shutter closed, camera kill-switch key, or vendor privacy mode enabled).
+async function isStreamBlack(video, samples = 4) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 48;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  for (let i = 0; i < samples; i += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let brightest = 0;
+    for (let p = 0; p < data.length; p += 4) brightest = Math.max(brightest, data[p], data[p + 1], data[p + 2]);
+    if (brightest > 24) return false;
+  }
+  return true;
 }
 
 async function refreshCameraList() {
@@ -184,6 +203,14 @@ async function connectCamera() {
     setCameraState({ connected: true, label, format, detail: 'LIVE PREVIEW' });
     els.cameraPreview.classList.add('has-preview');
     await refreshCameraList();
+    if (await isStreamBlack(els.webcam)) {
+      els.cameraConnectionState.textContent = 'Connected · no image';
+      els.cameraMode.textContent = 'BLACK FRAMES';
+      els.cameraHelp.textContent = 'The camera is connected but sending only black frames. Open the privacy shutter on the camera, press the camera on/off key (often F8, F9, or F10), and turn off camera privacy mode in your laptop vendor app (for example Lenovo Vantage), then reconnect.';
+      els.cameraHelp.classList.add('error');
+      showToast('Camera is sending black frames. Check the privacy shutter or camera key.', 'error');
+      return;
+    }
     showToast(`Camera connected at ${format}. Confirm the live image, then close this panel to inspect it.`);
   } catch (error) {
     const diagnosis = describeCameraError(error);
