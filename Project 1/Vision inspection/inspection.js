@@ -12,7 +12,11 @@ const ANALYSIS_WIDTH = 640;
 const ANALYSIS_HEIGHT = 320; // matches the 2:1 camera view
 const STORAGE_KEY = 'visionforge.program.v1';
 
-const thresholdParam = { key: 'threshold', label: 'Grey threshold (0–255)', type: 'number', min: 0, max: 255, step: 1 };
+const COLOR_NAMES = ['Red', 'Orange', 'Yellow', 'Green', 'Cyan', 'Blue', 'Purple', 'Pink', 'Brown', 'White', 'Grey', 'Black'];
+const FACE_API = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15';
+const HIRES_SCALE = 2; // face detection works on a 1280 × 640 copy of the view
+
+const thresholdParam ={ key: 'threshold', label: 'Grey threshold (0–255)', type: 'number', min: 0, max: 255, step: 1 };
 const polarityParam = { key: 'polarity', label: 'Count pixels that are', type: 'select', options: [['bright', 'Brighter than threshold'], ['dark', 'Darker than threshold']] };
 
 const TOOLS = {
@@ -60,6 +64,24 @@ const TOOLS = {
     summary: 'Similarity of the ROI average colour to the taught reference colour.',
     refs: 'Keyence Color Inspection · Omron Color Data',
     params: [], defaults: {}, criteria: { min: 90, max: 100 },
+  },
+  colorId: {
+    label: 'Color identify', group: 'Color', icon: '◉', unit: '%', digits: 0,
+    summary: 'Names the dominant colour in the ROI (red, blue, green…). Set an expected colour to require it; the value is the share of the ROI in that colour.',
+    refs: 'Keyence Color Area · Omron Color Data',
+    params: [{ key: 'expected', label: 'Expected colour', type: 'select', options: [['any', 'Any · report the colour only'], ...COLOR_NAMES.map((c) => [c, c])] }],
+    defaults: { expected: 'any' }, criteria: { min: 50, max: 100 },
+  },
+  faceId: {
+    label: 'Face ID', group: 'Identify', icon: '☺', unit: '%', digits: 0, enroll: true, fixed: true,
+    summary: 'Detects faces in the ROI and names enrolled people; others are reported as Unknown. The value is the match confidence. Enroll each person first.',
+    refs: 'Deep-learning face recognition · face-api.js 128-D descriptors',
+    params: [{
+      key: 'expected', label: 'Pass when', type: 'select',
+      options: (step) => [['anyEnrolled', 'Any enrolled person is recognised'], ['anyFace', 'Any face is present'],
+        ...(step.reference?.people || []).map((p) => [`person:${p.name}`, `${p.name} is recognised`])],
+    }],
+    defaults: { expected: 'anyEnrolled' }, criteria: { min: 50, max: 100 },
   },
   contrast: {
     label: 'Surface contrast', group: 'Defect', icon: '≋', unit: 'σ', digits: 1,
@@ -122,7 +144,7 @@ const formatValue = (tool, value) => (value === null || value === undefined || N
 function makeStep(tool, name, roi, overrides = {}) {
   const def = TOOLS[tool];
   return {
-    id: newId(), name, tool, enabled: true, roi,
+    id: newId(), name, tool, enabled: true, roi, fixed: Boolean(def.fixed),
     params: { ...def.defaults, ...(overrides.params || {}) },
     criteria: { ...def.criteria, ...(overrides.criteria || {}) },
     reference: null,
@@ -163,45 +185,154 @@ async function simulationImage() {
   return img;
 }
 
-function drawCover(ctx, source, sw, sh) {
-  const scale = Math.max(ANALYSIS_WIDTH / sw, ANALYSIS_HEIGHT / sh);
+function drawCover(ctx, source, sw, sh, width, height) {
+  const scale = Math.max(width / sw, height / sh);
   const dw = sw * scale;
   const dh = sh * scale;
-  ctx.drawImage(source, (ANALYSIS_WIDTH - dw) / 2, (ANALYSIS_HEIGHT - dh) / 2, dw, dh);
+  ctx.drawImage(source, (width - dw) / 2, (height - dh) / 2, dw, dh);
+}
+
+function drawSimulation(ctx, img, width, height) {
+  const gradient = ctx.createRadialGradient(width * 0.49, height * 0.45, 0, width * 0.49, height * 0.45, width * 0.55);
+  gradient.addColorStop(0, '#385360');
+  gradient.addColorStop(0.52, '#152e3a');
+  gradient.addColorStop(1, '#0b202e');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  // Same placement as .inspection-art (inset 2.5% 4%, SVG "meet" fit).
+  const bx = width * 0.04;
+  const by = height * 0.025;
+  const bw = width - 2 * bx;
+  const bh = height - 2 * by;
+  const scale = Math.min(bw / 760, bh / 330);
+  ctx.drawImage(img, bx + (bw - 760 * scale) / 2, by + (bh - 330 * scale) / 2, 760 * scale, 330 * scale);
 }
 
 // Returns what the operator sees in the camera view, as a 640 × 320 image, so
-// ROIs drawn on screen map one-to-one onto analysed pixels.
+// ROIs drawn on screen map one-to-one onto analysed pixels. `hires` is the same
+// view at twice the resolution, used by face recognition.
 async function acquireImage() {
+  let draw;
+  let source = 'SIMULATION';
+  if (!els.capturedFrame.hidden && els.capturedFrame.naturalWidth) {
+    const frame = els.capturedFrame;
+    draw = (ctx, w, h) => drawCover(ctx, frame, frame.naturalWidth, frame.naturalHeight, w, h);
+    source = 'CAPTURED FRAME';
+  } else if (state.cameraStream) {
+    if (!els.webcam.videoWidth) throw new Error('Camera is connected but has not delivered a frame.');
+    // Grab one video frame so both resolutions analyse the same instant.
+    const still = document.createElement('canvas');
+    still.width = els.webcam.videoWidth;
+    still.height = els.webcam.videoHeight;
+    still.getContext('2d').drawImage(els.webcam, 0, 0);
+    draw = (ctx, w, h) => drawCover(ctx, still, still.width, still.height, w, h);
+    source = 'LIVE CAMERA';
+  } else {
+    const img = await simulationImage();
+    draw = (ctx, w, h) => drawSimulation(ctx, img, w, h);
+  }
   const canvas = document.createElement('canvas');
   canvas.width = ANALYSIS_WIDTH;
   canvas.height = ANALYSIS_HEIGHT;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  let source = 'SIMULATION';
-  if (!els.capturedFrame.hidden && els.capturedFrame.naturalWidth) {
-    drawCover(ctx, els.capturedFrame, els.capturedFrame.naturalWidth, els.capturedFrame.naturalHeight);
-    source = 'CAPTURED FRAME';
-  } else if (state.cameraStream) {
-    if (!els.webcam.videoWidth) throw new Error('Camera is connected but has not delivered a frame.');
-    drawCover(ctx, els.webcam, els.webcam.videoWidth, els.webcam.videoHeight);
-    source = 'LIVE CAMERA';
-  } else {
-    const img = await simulationImage();
-    const gradient = ctx.createRadialGradient(ANALYSIS_WIDTH * 0.49, ANALYSIS_HEIGHT * 0.45, 0, ANALYSIS_WIDTH * 0.49, ANALYSIS_HEIGHT * 0.45, ANALYSIS_WIDTH * 0.55);
-    gradient.addColorStop(0, '#385360');
-    gradient.addColorStop(0.52, '#152e3a');
-    gradient.addColorStop(1, '#0b202e');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
-    // Same placement as .inspection-art (inset 2.5% 4%, SVG "meet" fit).
-    const bx = ANALYSIS_WIDTH * 0.04;
-    const by = ANALYSIS_HEIGHT * 0.025;
-    const bw = ANALYSIS_WIDTH - 2 * bx;
-    const bh = ANALYSIS_HEIGHT - 2 * by;
-    const scale = Math.min(bw / 760, bh / 330);
-    ctx.drawImage(img, bx + (bw - 760 * scale) / 2, by + (bh - 330 * scale) / 2, 760 * scale, 330 * scale);
+  draw(ctx, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+  let hires = null;
+  return {
+    image: ctx.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT),
+    source,
+    hires: () => {
+      if (!hires) {
+        hires = document.createElement('canvas');
+        hires.width = ANALYSIS_WIDTH * HIRES_SCALE;
+        hires.height = ANALYSIS_HEIGHT * HIRES_SCALE;
+        draw(hires.getContext('2d'), hires.width, hires.height);
+      }
+      return hires;
+    },
+  };
+}
+
+/* ---------- Colour naming ---------- */
+
+function colorName(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const v = max / 255;
+  const s = max === 0 ? 0 : (max - min) / max;
+  if (v < 0.2) return 'Black';
+  if (s < 0.25) return v > 0.8 ? 'White' : v < 0.3 ? 'Black' : 'Grey';
+  const d = max - min;
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  if (h < 15 || h >= 345) return 'Red';
+  if (h < 40) return v < 0.6 ? 'Brown' : 'Orange';
+  if (h < 70) return 'Yellow';
+  if (h < 165) return 'Green';
+  if (h < 195) return 'Cyan';
+  if (h < 255) return 'Blue';
+  if (h < 290) return 'Purple';
+  return 'Pink';
+}
+
+/* ---------- Face recognition (loaded on first use) ---------- */
+
+let faceApiReady = null;
+function loadFaceApi() {
+  if (!faceApiReady) {
+    showToast('Loading face recognition models (about 7 MB, first use only)…');
+    faceApiReady = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = `${FACE_API}/dist/face-api.js`;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Face recognition library could not be loaded. Check the internet connection.'));
+      document.head.append(script);
+    }).then(() => {
+      const url = `${FACE_API}/model/`;
+      return Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(url),
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri(url),
+        faceapi.nets.faceRecognitionNet.loadFromUri(url),
+      ]);
+    });
+    faceApiReady.catch(() => { faceApiReady = null; });
   }
-  return { image: ctx.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT), source };
+  return faceApiReady;
+}
+
+async function detectFaces(acquired, rect) {
+  await loadFaceApi();
+  const crop = document.createElement('canvas');
+  crop.width = rect.w * HIRES_SCALE;
+  crop.height = rect.h * HIRES_SCALE;
+  crop.getContext('2d').drawImage(acquired.hires(), rect.x * HIRES_SCALE, rect.y * HIRES_SCALE, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  const faces = await faceapi
+    .detectAllFaces(crop, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
+    .withFaceLandmarks(true)
+    .withFaceDescriptors();
+  return faces.map((f) => {
+    const box = f.detection.box;
+    return {
+      descriptor: f.descriptor,
+      // Face box as a fraction of the camera view, for the overlay.
+      box: {
+        x: (rect.x + box.x / HIRES_SCALE) / ANALYSIS_WIDTH,
+        y: (rect.y + box.y / HIRES_SCALE) / ANALYSIS_HEIGHT,
+        w: box.width / HIRES_SCALE / ANALYSIS_WIDTH,
+        h: box.height / HIRES_SCALE / ANALYSIS_HEIGHT,
+      },
+    };
+  });
+}
+
+function bestMatch(descriptor, people) {
+  let best = { name: 'Unknown', confidence: 0 };
+  people.forEach((person) => {
+    person.descriptors.forEach((d) => {
+      const confidence = Math.max(0, 1 - faceapi.euclideanDistance(descriptor, d)) * 100;
+      if (confidence > best.confidence) best = { name: person.name, confidence };
+    });
+  });
+  return best;
 }
 
 /* ---------- Pixel helpers ---------- */
@@ -348,7 +479,49 @@ const RUNNERS = {
     const rgb = meanColor(image, rect);
     const distance = Math.hypot(rgb[0] - step.reference.rgb[0], rgb[1] - step.reference.rgb[1], rgb[2] - step.reference.rgb[2]);
     const similarity = Math.max(0, 100 - (distance / 441.7) * 100 * 4);
-    return { value: similarity, text: `${similarity.toFixed(1)}% · rgb(${rgb.map((v) => v.toFixed(0)).join(', ')})` };
+    const name = colorName(...rgb);
+    return { value: similarity, label: `${name} · ${similarity.toFixed(1)}%`, text: `${name} · rgb(${rgb.map((v) => v.toFixed(0)).join(', ')}) · reference ${colorName(...step.reference.rgb)}` };
+  },
+
+  colorId(image, rect, step) {
+    const counts = Object.fromEntries(COLOR_NAMES.map((c) => [c, 0]));
+    const { data, width } = image;
+    for (let j = 0; j < rect.h; j += 1) {
+      for (let i = 0; i < rect.w; i += 1) {
+        const p = ((rect.y + j) * width + rect.x + i) * 4;
+        counts[colorName(data[p], data[p + 1], data[p + 2])] += 1;
+      }
+    }
+    const total = rect.w * rect.h;
+    const ranked = Object.entries(counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+    const [dominant, dominantCount] = ranked[0];
+    const expected = step.params.expected;
+    const share = ((expected === 'any' ? dominantCount : counts[expected]) / total) * 100;
+    const breakdown = ranked.slice(0, 3).map(([c, n]) => `${c} ${((n / total) * 100).toFixed(0)}%`).join(', ');
+    const label = expected === 'any' || expected === dominant ? `${dominant} · ${share.toFixed(0)}%` : `${dominant} (expected ${expected} ${share.toFixed(0)}%)`;
+    return { value: share, label, text: breakdown };
+  },
+
+  async faceId(image, rect, step, context, acquired) {
+    const people = step.reference?.people || [];
+    const expected = step.params.expected;
+    if (expected !== 'anyFace' && !people.length) return { error: 'No one is enrolled. Enter a name and select Enroll face.' };
+    const faces = await detectFaces(acquired, rect);
+    if (!faces.length) return { value: 0, label: 'No face', text: 'No face detected in the ROI', faces: [] };
+    const minimum = step.criteria.min;
+    const named = faces.map((face) => {
+      const match = people.length ? bestMatch(face.descriptor, people) : { name: 'Unknown', confidence: 0 };
+      const recognised = match.confidence >= minimum;
+      return { box: face.box, name: recognised ? match.name : 'Unknown', confidence: match.confidence, recognised };
+    });
+    let value;
+    if (expected === 'anyFace') value = 100;
+    else if (expected.startsWith('person:')) {
+      const wanted = expected.slice(7);
+      value = Math.max(0, ...named.filter((f) => f.name === wanted).map((f) => f.confidence));
+    } else value = Math.max(0, ...named.filter((f) => f.recognised).map((f) => f.confidence));
+    const label = named.map((f) => (f.recognised ? `${f.name} ${f.confidence.toFixed(0)}%` : 'Unknown')).join(', ');
+    return { value, label, text: `${faces.length} face${faces.length === 1 ? '' : 's'}: ${label}`, faces: named };
   },
 
   pattern(image, rect, step) {
@@ -415,7 +588,14 @@ function judge(step, outcome) {
   if (outcome.fail) return { status: 'FAIL', value: outcome.value, text: outcome.fail };
   const { min, max } = step.criteria;
   const ok = outcome.value >= min && outcome.value <= max;
-  return { status: ok ? 'PASS' : 'FAIL', value: outcome.value, text: outcome.text, offset: outcome.offset };
+  return { status: ok ? 'PASS' : 'FAIL', value: outcome.value, label: outcome.label, text: outcome.text, offset: outcome.offset, faces: outcome.faces };
+}
+
+// Short result for display: a name (colour, person) when the tool gives one, else the value.
+function resultLabel(step, result) {
+  if (result.label) return result.label;
+  if (result.value !== null && result.value !== undefined) return `${formatValue(step.tool, result.value)} ${TOOLS[step.tool].unit}`;
+  return result.status;
 }
 
 async function runProgram({ record = true } = {}) {
@@ -432,15 +612,15 @@ async function runProgram({ record = true } = {}) {
     let lostPart = null;
     for (const step of pgm.program.steps) {
       if (!step.enabled) { results[step.id] = { status: 'SKIPPED', value: null, text: 'Step disabled' }; continue; }
-      if (lostPart) { results[step.id] = { status: 'SKIPPED', value: null, text: `Part not located by “${lostPart}”` }; continue; }
+      if (lostPart && !step.fixed) { results[step.id] = { status: 'SKIPPED', value: null, text: `Part not located by “${lostPart}”` }; continue; }
       const t0 = performance.now();
-      const rect = roiRect(step.roi, offset);
+      const rect = roiRect(step.roi, step.fixed ? undefined : offset);
       let result;
       if (rect.w < 4 || rect.h < 4) {
         result = { status: 'ERROR', value: null, text: 'ROI is outside the image' };
       } else {
         try {
-          result = judge(step, RUNNERS[step.tool](acquired.image, rect, step, pgm.program));
+          result = judge(step, await RUNNERS[step.tool](acquired.image, rect, step, pgm.program, acquired));
         } catch (error) {
           result = { status: 'ERROR', value: null, text: error.message };
         }
@@ -493,7 +673,7 @@ function showOverall(overall, results, cycle, source, record) {
     const r = results[step.id] || { status: 'ERROR', text: 'Not run' };
     const def = TOOLS[step.tool];
     const limits = `${step.criteria.min} – ${step.criteria.max} ${def.unit}`;
-    const detail = r.value !== null && r.value !== undefined ? `${formatValue(step.tool, r.value)} ${def.unit} <em>${limits}</em>` : escapeHtml(r.text);
+    const detail = r.label || (r.value !== null && r.value !== undefined) ? `${escapeHtml(resultLabel(step, r))} <em>${limits}</em>` : escapeHtml(r.text);
     const mark = { PASS: '✓', FAIL: '×', ERROR: '!', SKIPPED: '–' }[r.status];
     return `<div class="check ${r.status.toLowerCase()}"><span class="check-number">${String(index + 1).padStart(2, '0')}</span><div><strong>${escapeHtml(step.name)}</strong><small>${detail}</small></div><b>${r.status}</b><i>${mark}</i></div>`;
   }).join('');
@@ -549,7 +729,7 @@ function renderStepList() {
   pe.stepList.innerHTML = steps.map((step, index) => {
     const tool = TOOLS[step.tool];
     const result = pgm.lastResults[step.id];
-    const value = result && result.value !== null && result.value !== undefined ? `${formatValue(step.tool, result.value)} ${tool.unit}` : '';
+    const value = result && (result.label || (result.value !== null && result.value !== undefined)) ? escapeHtml(resultLabel(step, result)) : '';
     return `<li class="${step.id === pgm.selectedId ? 'selected' : ''} ${step.enabled ? '' : 'disabled'}">
       <button type="button" class="step-select" data-select="${step.id}">
         <span class="step-number">${String(index + 1).padStart(2, '0')}</span>
@@ -568,9 +748,19 @@ function renderStepList() {
 function paramField(step, param) {
   const value = step.params[param.key];
   if (param.type === 'select') {
-    return `<label>${param.label}<select data-param="${param.key}">${param.options.map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`;
+    const options = typeof param.options === 'function' ? param.options(step) : param.options;
+    return `<label>${param.label}<select data-param="${param.key}">${options.map(([v, l]) => `<option value="${escapeHtml(v)}" ${v === value ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select></label>`;
   }
   return `<label>${param.label}<input type="number" data-param="${param.key}" value="${value}" min="${param.min}" max="${param.max}" step="${param.step}" /></label>`;
+}
+
+function enrollFieldset(step) {
+  const people = step.reference?.people || [];
+  return `<fieldset><legend>Enrolled people</legend>
+    <ul class="people">${people.map((p) => `<li><span>${escapeHtml(p.name)} <small>${p.descriptors.length} sample${p.descriptors.length === 1 ? '' : 's'}</small></span><button type="button" class="danger-link" data-edit="unenroll" data-name="${escapeHtml(p.name)}">Remove</button></li>`).join('') || '<li class="empty">No one enrolled yet.</li>'}</ul>
+    <div class="enroll-row"><input type="text" id="enrollName" placeholder="Person name" maxlength="30" aria-label="Person name" /><button type="button" class="secondary-button" data-edit="enroll">Enroll face</button></div>
+    <small class="field-hint">Face the camera alone inside the ROI, then enroll. Enroll 2–3 samples per person (slightly different angles) for reliable recognition. Only a numeric face signature is stored, not the image.</small>
+  </fieldset>`;
 }
 
 function renderEditor() {
@@ -597,10 +787,16 @@ function renderEditor() {
       <div class="roi-fields">
         ${['x', 'y', 'w', 'h'].map((k) => `<label>${{ x: 'X', y: 'Y', w: 'Width', h: 'Height' }[k]}<input type="number" data-roi="${k}" value="${pct(step.roi[k])}" min="0" max="100" step="0.1" /></label>`).join('')}
       </div>
+      <label>ROI position<select data-field="fixed">
+        <option value="follow" ${step.fixed ? '' : 'selected'}>Follows part locator</option>
+        <option value="fixed" ${step.fixed ? 'selected' : ''}>Fixed in image (runs even if the part is not located)</option>
+      </select></label>
       <button type="button" class="secondary-button" data-edit="draw">Draw ROI on image</button>
     </fieldset>
 
     ${tool.params.length ? `<fieldset><legend>Tool parameters</legend><div class="param-fields">${tool.params.map((p) => paramField(step, p)).join('')}</div></fieldset>` : ''}
+
+    ${tool.enroll ? enrollFieldset(step) : ''}
 
     ${tool.teach ? `<fieldset><legend>Reference</legend><div class="teach-row"><span class="${step.reference ? 'taught' : 'untaught'}">${taught}</span><button type="button" class="secondary-button" data-edit="teach">Teach reference</button></div><small class="field-hint">Teaching stores the current ROI contents from the image in the camera view.</small></fieldset>` : ''}
 
@@ -615,7 +811,7 @@ function renderEditor() {
 
     <div class="measurement ${result ? result.status.toLowerCase() : ''}">
       <span>LAST MEASUREMENT</span>
-      <strong>${result ? (result.value !== null && result.value !== undefined ? `${formatValue(step.tool, result.value)} ${tool.unit}` : result.status) : '—'}</strong>
+      <strong>${result ? escapeHtml(resultLabel(step, result)) : '—'}</strong>
       <small>${result ? `${escapeHtml(result.text)}${result.ms !== undefined ? ` · ${result.ms.toFixed(1)} ms` : ''}` : 'Run the inspection to measure this step.'}</small>
     </div>
 
@@ -637,10 +833,12 @@ function renderOverlay() {
       ? { x: rect.x / ANALYSIS_WIDTH, y: rect.y / ANALYSIS_HEIGHT, w: rect.w / ANALYSIS_WIDTH, h: rect.h / ANALYSIS_HEIGHT }
       : step.roi;
     const cls = [result ? result.status.toLowerCase() : '', step.id === pgm.selectedId ? 'selected' : ''].join(' ');
-    const value = result && result.value !== null && result.value !== undefined ? ` ${formatValue(step.tool, result.value)}` : '';
+    const value = result && (result.label || (result.value !== null && result.value !== undefined)) ? ` · ${escapeHtml(resultLabel(step, result).toUpperCase())}` : '';
     return `<div class="roi ${cls}" data-select="${step.id}" style="left:${box.x * 100}%;top:${box.y * 100}%;width:${box.w * 100}%;height:${box.h * 100}%">
       <span>${String(index + 1).padStart(2, '0')}</span><small>${escapeHtml(step.name.toUpperCase())}${value}</small></div>`;
-  }).join('');
+  }).join('') + pgm.program.steps.flatMap((step) => pgm.lastResults[step.id]?.faces || []).map((face) => `
+    <div class="face-box ${face.recognised ? 'known' : 'unknown'}" style="left:${face.box.x * 100}%;top:${face.box.y * 100}%;width:${face.box.w * 100}%;height:${face.box.h * 100}%">
+      <b>${escapeHtml(face.recognised ? `${face.name} ${face.confidence.toFixed(0)}%` : 'Unknown')}</b></div>`).join('');
 }
 
 function renderAudit() {
@@ -701,6 +899,35 @@ async function teachSelected() {
   }
 }
 
+async function enrollSelected() {
+  const step = stepById(pgm.selectedId);
+  const input = pe.editor.querySelector('#enrollName');
+  const name = input.value.trim();
+  if (!name) { input.focus(); showToast('Enter the person’s name before enrolling.', 'error'); return; }
+  const button = pe.editor.querySelector('[data-edit="enroll"]');
+  button.disabled = true;
+  button.textContent = 'Enrolling…';
+  try {
+    const acquired = await acquireImage();
+    const rect = roiRect(step.roi);
+    if (rect.w < 4 || rect.h < 4) throw new Error('ROI is outside the image.');
+    const faces = await detectFaces(acquired, rect);
+    if (faces.length !== 1) throw new Error(faces.length ? `${faces.length} faces found; only the person being enrolled may be in the ROI.` : 'No face found in the ROI. Face the camera and try again.');
+    step.reference ||= { people: [] };
+    step.reference.people ||= [];
+    let person = step.reference.people.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (!person) { person = { name, descriptors: [] }; step.reference.people.push(person); }
+    person.descriptors.push(Array.from(faces[0].descriptor, (v) => Number(v.toFixed(5))));
+    step.reference.taughtAt = new Date().toISOString();
+    markDirty();
+    renderEditor();
+    showToast(`Enrolled ${person.name} (${person.descriptors.length} sample${person.descriptors.length === 1 ? '' : 's'}). Save a new version to keep it.`);
+  } catch (error) {
+    showToast(`Enroll failed: ${error.message}`, 'error');
+    renderEditor();
+  }
+}
+
 function describeChanges(before, after) {
   const changes = [];
   const oldSteps = new Map(before.steps.map((s) => [s.id, s]));
@@ -714,7 +941,9 @@ function describeChanges(before, after) {
     if (old.criteria.min !== step.criteria.min || old.criteria.max !== step.criteria.max) changes.push(`“${step.name}” limits ${old.criteria.min}–${old.criteria.max} → ${step.criteria.min}–${step.criteria.max}`);
     if (JSON.stringify(old.roi) !== JSON.stringify(step.roi)) changes.push(`“${step.name}” ROI moved`);
     if (JSON.stringify(old.params) !== JSON.stringify(step.params)) changes.push(`“${step.name}” parameters changed`);
-    if (old.reference?.taughtAt !== step.reference?.taughtAt) changes.push(`“${step.name}” reference re-taught`);
+    if (old.fixed !== step.fixed) changes.push(`“${step.name}” ROI ${step.fixed ? 'fixed in image' : 'follows locator'}`);
+    if (JSON.stringify(old.reference?.people?.map((p) => p.name)) !== JSON.stringify(step.reference?.people?.map((p) => p.name))) changes.push(`“${step.name}” enrolled people: ${(step.reference?.people || []).map((p) => p.name).join(', ') || 'none'}`);
+    else if (old.reference?.taughtAt !== step.reference?.taughtAt) changes.push(`“${step.name}” reference re-taught`);
   });
   before.steps.forEach((step) => { if (!newIds.has(step.id)) changes.push(`removed “${step.name}”`); });
   if (before.steps.map((s) => s.id).filter((id) => newIds.has(id)).join() !== after.steps.map((s) => s.id).filter((id) => oldSteps.has(id)).join()) changes.push('step order changed');
@@ -867,6 +1096,7 @@ pe.editor.addEventListener('change', (event) => {
   if (!step || !canEdit()) return;
   if (input.dataset.field === 'enabled') step.enabled = input.checked;
   else if (input.dataset.field === 'name') step.name = input.value.trim() || TOOLS[step.tool].label;
+  else if (input.dataset.field === 'fixed') step.fixed = input.value === 'fixed';
   else if (input.dataset.roi) step.roi[input.dataset.roi] = clamp(Number(input.value) / 100, 0, 1);
   else if (input.dataset.criteria) step.criteria[input.dataset.criteria] = Number(input.value);
   else if (input.dataset.param) {
@@ -886,6 +1116,14 @@ pe.editor.addEventListener('click', (event) => {
   const action = button.dataset.edit;
   if (action === 'draw') startDrawing();
   if (action === 'teach') teachSelected();
+  if (action === 'enroll') enrollSelected();
+  if (action === 'unenroll') {
+    step.reference.people = step.reference.people.filter((p) => p.name !== button.dataset.name);
+    if (step.params.expected === `person:${button.dataset.name}`) step.params.expected = 'anyEnrolled';
+    markDirty();
+    renderEditor();
+    showToast(`${button.dataset.name} removed from “${step.name}”.`);
+  }
   if (action === 'duplicate') {
     const copy = { ...clone(step), id: newId(), name: `${step.name} copy` };
     pgm.program.steps.splice(pgm.program.steps.indexOf(step) + 1, 0, copy);
