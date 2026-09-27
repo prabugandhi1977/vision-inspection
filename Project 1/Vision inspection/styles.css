@@ -224,3 +224,12 @@ button { cursor: pointer; }
 .mirror-toggle small { color:#87989c; font-size:10px; }
 .person-actions { align-items:center; display:flex; gap:12px; }
 .person-actions .text-button { font-size:10px; }
+
+/* AI anomaly detection */
+.heatmap { image-rendering:auto; pointer-events:none; position:absolute; z-index:4; mix-blend-mode:screen; }
+.learn-actions { align-items:center; display:flex; flex-wrap:wrap; gap:8px; }
+.learn-actions .danger-link { margin-left:auto; }
+.inspection-footer .defect-button { background:transparent; border:1px solid #f0d2cc; color:#b8554e; margin-left:9px; padding:6px 10px; }
+.inspection-footer .defect-button[aria-pressed="true"] { background:#fdebea; border-color:#e87266; }
+.inspection-footer { flex-wrap:wrap; padding-bottom:10px; padding-top:10px; row-gap:10px; }
+.inspection-footer button { white-space:nowrap; }
