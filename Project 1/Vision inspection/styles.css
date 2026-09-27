@@ -326,3 +326,22 @@ body.signed-out .app-shell { filter:blur(3px); pointer-events:none; }
   .settings-form.inline,.settings-form.grid,.account-facts,.demo-accounts > div { grid-template-columns:1fr; }
 }
 .login-brand .brand-mark i:nth-child(2) { background:#152c3a; }
+
+/* Camera sources: this device vs smart / IP camera gateway */
+.source-switch { display:grid; gap:8px; grid-template-columns:1fr 1fr; margin:16px 0 14px; }
+.source-switch button { background:#f6f9f8; border:1px solid #dbe6e4; border-radius:4px; display:grid; gap:3px; padding:10px 12px; text-align:left; }
+.source-switch button[aria-pressed="true"] { background:#e8f6f2; border-color:#168f7a; box-shadow:0 0 0 1px #168f7a; }
+.source-switch strong { color:#24414c; font-size:12px; }
+.source-switch small { color:#7d9097; font:9px var(--mono); }
+#deviceSource, #gatewaySource { display:grid; gap:7px; }
+#deviceSource[hidden], #gatewaySource[hidden] { display:none; }
+#deviceSource label:not(.mirror-toggle), #gatewaySource label:not(.mirror-toggle) { margin:4px 0 0; }
+.gateway-row { display:flex; gap:8px; }
+.gateway-row input { border:1px solid #cfdbdd; border-radius:3px; color:#2c4854; flex:1; font:12px var(--mono); min-height:40px; min-width:0; padding:0 11px; }
+.mirror-toggle.muted { opacity:.5; }
+.camera-preview img { height:100%; object-fit:contain; width:100%; }
+.camera-preview.has-preview #gatewayPreview:not([hidden]) ~ p { display:none; }
+.gateway-feed { background:#061722; object-fit:contain; }
+.camera-dialog__panel { max-height:calc(100vh - 36px); overflow:auto; }
+@media (max-width: 520px) { .source-switch { grid-template-columns:1fr; } }
+.camera-frame.mirrored .gateway-feed { transform:none; }

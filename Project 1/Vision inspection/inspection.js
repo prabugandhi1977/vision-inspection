@@ -264,6 +264,12 @@ async function acquireImage({ ideal = false } = {}) {
     const frame = els.capturedFrame;
     draw = (ctx, w, h) => drawCover(ctx, frame, frame.naturalWidth, frame.naturalHeight, w, h);
     source = 'CAPTURED FRAME';
+  } else if (state.gateway) {
+    // Smart / IP camera: a fresh frame for every inspection (triggered when configured).
+    // A failure throws, so the inspection reports ERROR instead of judging a stale image.
+    const image = await gatewayFrameForInspection();
+    draw = (ctx, w, h) => drawCover(ctx, image, image.naturalWidth, image.naturalHeight, w, h);
+    source = state.gateway.trigger && state.gateway.camera.canTrigger ? 'SMART CAMERA · TRIGGERED' : 'SMART CAMERA';
   } else if (state.cameraStream) {
     if (!els.webcam.videoWidth) throw new Error('Camera is connected but has not delivered a frame.');
     // Grab one video frame so both resolutions analyse the same instant.

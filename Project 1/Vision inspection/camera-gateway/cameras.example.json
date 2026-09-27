@@ -1,0 +1,53 @@
+{
+  "port": 8765,
+  "host": "127.0.0.1",
+  "timeoutMs": 6000,
+  "allowedOrigins": [
+    "https://prabugandhi1977.github.io",
+    "http://127.0.0.1:4173",
+    "http://localhost:4173"
+  ],
+  "cameras": [
+    {
+      "id": "cognex-1",
+      "name": "Cognex In-Sight (Native Mode)",
+      "vendor": "Cognex",
+      "type": "cognex-native",
+      "host": "192.168.0.50",
+      "port": 23,
+      "user": "admin",
+      "password": "",
+      "trigger": true
+    },
+    {
+      "id": "hikvision-1",
+      "name": "Hikvision IP camera (ISAPI snapshot)",
+      "vendor": "Hikvision",
+      "type": "http-snapshot",
+      "url": "http://192.168.0.64/ISAPI/Streaming/channels/101/picture",
+      "auth": "digest",
+      "user": "admin",
+      "password": "change-me"
+    },
+    {
+      "id": "hikvision-rtsp",
+      "name": "Hikvision stream (RTSP via ffmpeg)",
+      "vendor": "Hikvision",
+      "type": "rtsp",
+      "url": "rtsp://admin:change-me@192.168.0.64:554/Streaming/Channels/101"
+    },
+    {
+      "id": "phone-1",
+      "name": "Phone camera (IP Webcam app)",
+      "vendor": "Android",
+      "type": "http-snapshot",
+      "url": "http://192.168.0.23:8080/shot.jpg"
+    },
+    {
+      "id": "smartcam-ftp",
+      "name": "Smart camera FTP images (Cognex / Keyence / HIKROBOT)",
+      "type": "folder",
+      "path": "C:/VisionImages/station1"
+    }
+  ]
+}

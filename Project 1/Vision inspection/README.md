@@ -87,6 +87,15 @@ This sign-in runs entirely in the browser (users, salted SHA-256 password hashes
 
 After learning, **drift** is flagged when two consecutive inspections are more than 2.5σ from the learned mean on the same side while still passing (an SPC run rule), shown as *PASS ⚠* on the step and in the result message. In testing: 40 normal parts gave no drift alarms; a 4σ process shift was flagged on the second inspection. AI anomaly and Face ID steps learn on their own and are not included.
 
+## Camera sources: phone, smart and IP cameras
+
+**Configure camera** offers two sources:
+
+- **This device**: the PC's webcam, a phone's own camera (open the page on the phone and choose *Lens: Rear camera*; mirroring switches off for the rear camera), or a phone used as a PC webcam through DroidCam or Iriun.
+- **Smart / IP camera**: Cognex In-Sight (Native Mode, with a software trigger on every Inspect), Hikvision and other IP cameras (HTTP snapshot with digest login, or RTSP via ffmpeg), phone *IP Webcam* apps, and smart cameras that write images by FTP to a folder (Cognex, Keyence, HIKROBOT). These connect through the **camera gateway** in [`camera-gateway/`](camera-gateway/README.md), a dependency-free Node.js service run on the station PC, because browsers cannot use these cameras' protocols directly.
+
+With a smart camera, each inspection fetches a fresh frame (triggered where supported); if the camera does not deliver one, the result is ERROR. Connecting a camera needs the **ConfigureCamera** permission and is recorded in the audit trail.
+
 ## Web camera setup
 
 1. Open the local dashboard and select **Configure camera**.
