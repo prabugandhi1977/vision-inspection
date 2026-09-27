@@ -2,6 +2,20 @@
 
 A responsive front-end prototype for a manufacturing vision-inspection station. It is intentionally hardware-independent and uses simulated results so the operator experience can be reviewed before camera, PLC, and database integrations are built.
 
+## Layout and navigation
+
+The console follows the Expense360 layout and design system: a left sidebar with the VisionForge wordmark and icon tabs that show one view at a time, a top bar with the station, the signed-in role and name, a **Light / Dark / Auto** theme switch and **Sign out**, and views made of a serif title, KPI tiles and card grids (Fraunces, IBM Plex Sans and IBM Plex Mono). On phones the sidebar becomes a scrolling tab bar.
+
+| View | Contents |
+| --- | --- |
+| Overview | Line status, output / pass rate / rejects / cycle time, recent results, defect distribution |
+| Live inspection | Camera view with ROIs, Inspect / capture / simulate, result detail |
+| Inspection program | Tool library, steps, step editor, learn limits, save and approval |
+| Audit log | Sign-ins, recipe submissions and approvals, camera, user and settings changes |
+| Settings | My account; for administrators users, roles and station settings |
+
+Views are linkable (`#overview`, `#live`, `#program`, `#audit`, `#settings`), the last view and theme are remembered, and tabs follow the signed-in role's permissions. **Draw ROI on image** switches to Live inspection and returns to the program when the ROI is drawn.
+
 ## Run locally
 
 Open `index.html` in a modern browser, or serve the folder with any static web server.

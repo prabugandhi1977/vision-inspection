@@ -189,8 +189,6 @@ function logout(message = 'Signed out.') {
   auth.audit('Logout', 'Session', 'signed in', message.startsWith('Signed out after') ? 'timed out' : 'signed out');
   auth.user = null;
   clearSession();
-  closeModal(document.querySelector('#settingsDialog'));
-  document.querySelector('#profileMenu').hidden = true;
   auth.notify();
   showToast(message);
 }
@@ -205,17 +203,9 @@ const authEls = {
   loginError: document.querySelector('#loginError'),
   loginStation: document.querySelector('#loginStation'),
   demoAccounts: document.querySelector('#demoAccounts'),
-  profileMenu: document.querySelector('#profileMenu'),
-  settingsDialog: document.querySelector('#settingsDialog'),
   settingsBody: document.querySelector('#settingsBody'),
   settingsTabs: document.querySelector('#settingsTabs'),
-  settingsNav: document.querySelector('#settingsNav'),
 };
-
-function greetingFor(date = new Date()) {
-  const hour = date.getHours();
-  return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-}
 
 function applyPermissions() {
   const user = auth.user;
@@ -226,19 +216,15 @@ function applyPermissions() {
   document.querySelector('#lineName').textContent = settings.lineName;
   authEls.loginStation.textContent = settings.stationName;
   if (user) {
-    const initials = user.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
-    document.querySelector('#userAvatar').textContent = initials;
     document.querySelector('#userName').textContent = user.name;
     document.querySelector('#userRole').textContent = auth.roleLabel(user.role);
-    document.querySelector('#greeting').textContent = `${greetingFor()}, ${user.name.split(/\s+/)[0]}`;
   }
   document.querySelectorAll('[data-permission]').forEach((element) => {
     const allowed = auth.can(element.dataset.permission);
-    if (element.closest('#profileMenu, #settingsTabs')) { element.hidden = !allowed; return; }
+    if (element.closest('#settingsTabs')) { element.hidden = !allowed; return; }
     element.disabled = !allowed;
     element.title = allowed ? (element.dataset.title || element.title || '') : `Requires the ${element.dataset.permission} permission`;
   });
-  authEls.settingsNav.hidden = !(auth.can('ManageUsers') || auth.can('ManageSettings'));
 }
 
 /* ---------- Login screen ---------- */
@@ -267,27 +253,9 @@ authEls.loginForm.addEventListener('submit', async (event) => {
   }
 });
 
-/* ---------- Profile menu ---------- */
+/* ---------- Top bar ---------- */
 
-document.querySelector('#profileButton').addEventListener('click', (event) => {
-  event.stopPropagation();
-  const rect = event.currentTarget.getBoundingClientRect();
-  Object.assign(authEls.profileMenu.style, { left: `${rect.left}px`, bottom: `${window.innerHeight - rect.top + 6}px` });
-  authEls.profileMenu.hidden = !authEls.profileMenu.hidden;
-});
-document.addEventListener('click', (event) => {
-  if (!event.target.closest('#profileMenu')) authEls.profileMenu.hidden = true;
-});
-authEls.profileMenu.addEventListener('click', (event) => {
-  const open = event.target.closest('[data-open-settings]');
-  if (open) { authEls.profileMenu.hidden = true; openSettings(open.dataset.openSettings); }
-});
 document.querySelector('#logoutButton').addEventListener('click', () => logout());
-authEls.settingsNav.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopImmediatePropagation();
-  openSettings(auth.can('ManageUsers') ? 'users' : 'station');
-}, true);
 
 /* ---------- Modals ---------- */
 
@@ -301,15 +269,14 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') document.querySelectorAll('.modal:not([hidden])').forEach(closeModal);
 });
 
-/* ---------- Settings dialog ---------- */
+/* ---------- Settings view ---------- */
 
 let settingsTab = 'account';
 const esc = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function openSettings(tab = 'account') {
   settingsTab = tab;
-  renderSettings();
-  openModal(authEls.settingsDialog);
+  showView('settings');
 }
 
 function renderSettings() {

@@ -1572,12 +1572,23 @@ function loadStored() {
 
 /* ---------- ROI drawing on the camera view ---------- */
 
+// The camera image lives in the Live inspection view: switch there to draw, and return to the
+// program editor when the ROI is drawn or drawing is cancelled.
 function startDrawing() {
   if (!pgm.selectedId) return;
   pgm.drawing = true;
+  pgm.returnToProgram = typeof showView === 'function' && currentView === 'program';
+  if (pgm.returnToProgram) showView('live', { scroll: false });
   els.cameraFrame.classList.add('drawing');
   pe.drawHint.hidden = false;
   els.cameraFrame.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function returnFromDrawing() {
+  if (!pgm.returnToProgram) return;
+  pgm.returnToProgram = false;
+  showView('program', { scroll: false });
+  pe.editor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function stopDrawing() {
@@ -1617,16 +1628,16 @@ els.cameraFrame.addEventListener('pointerup', (event) => {
   const roi = { x: Math.min(p.x, dragStart.x), y: Math.min(p.y, dragStart.y), w: Math.abs(p.x - dragStart.x), h: Math.abs(p.y - dragStart.y) };
   dragStart = null;
   stopDrawing();
-  if (roi.w < 0.01 || roi.h < 0.01) { showToast('ROI too small. Drag a larger area.', 'error'); return; }
+  if (roi.w < 0.01 || roi.h < 0.01) { showToast('ROI too small. Drag a larger area.', 'error'); returnFromDrawing(); return; }
   const step = stepById(pgm.selectedId);
   step.roi = Object.fromEntries(Object.entries(roi).map(([k, v]) => [k, Number(v.toFixed(4))]));
   markDirty();
   renderEditor();
-  pe.editor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  returnFromDrawing();
   const needsTeach = TOOLS[step.tool].teach ? ' Teach the reference again for the new ROI.' : '';
   showToast(`ROI set for “${step.name}”.${needsTeach}`);
 });
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && pgm.drawing) { dragStart = null; stopDrawing(); } });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && pgm.drawing) { dragStart = null; stopDrawing(); returnFromDrawing(); } });
 
 /* ---------- Events ---------- */
 
