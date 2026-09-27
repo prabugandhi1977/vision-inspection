@@ -224,7 +224,7 @@ async function acquireImage() {
     const still = document.createElement('canvas');
     still.width = els.webcam.videoWidth;
     still.height = els.webcam.videoHeight;
-    still.getContext('2d').drawImage(els.webcam, 0, 0);
+    drawCameraFrame(still.getContext('2d'), still.width, still.height);
     draw = (ctx, w, h) => drawCover(ctx, still, still.width, still.height, w, h);
     source = 'LIVE CAMERA';
   } else {
