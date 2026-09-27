@@ -103,10 +103,11 @@ const pgm = {
   audit: [],
   selectedId: null,
   dirty: false,
-  role: 'quality',
+  pending: null,     // recipe change submitted for approval
   drawing: false,
   lastResults: {},   // step id → result from the latest run
   simImage: null,
+  lastZ: {},         // last deviation per step (σ from the learned mean), for the drift rule
 };
 
 const pe = {
@@ -118,7 +119,9 @@ const pe = {
   product: document.querySelector('#programProduct'),
   version: document.querySelector('#programVersion'),
   state: document.querySelector('#programState'),
-  role: document.querySelector('#roleSelect'),
+  user: document.querySelector('#programUser'),
+  approval: document.querySelector('#approvalBanner'),
+  learn: document.querySelector('#learnLimitsButton'),
   permissionNote: document.querySelector('#permissionNote'),
   card: document.querySelector('#recipes'),
   library: document.querySelector('#toolLibrary'),
@@ -143,7 +146,8 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const newId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-const canEdit = () => pgm.role !== 'operator';
+const canEdit = () => auth.can('ModifyRecipe');
+const auditUser = () => (auth.user ? `${auth.user.name} (${auth.roleLabel(auth.user.role)})` : 'System');
 const stepById = (id) => pgm.program.steps.find((step) => step.id === id);
 const formatValue = (tool, value) => (value === null || value === undefined || Number.isNaN(value) ? '—' : Number(value).toFixed(TOOLS[tool].digits));
 
@@ -960,11 +964,14 @@ async function exclusive(task) {
     return await task();
   } finally {
     busy = false;
-    [pe.inspect, pe.run].forEach((button) => { button.disabled = false; });
+    [pe.inspect, pe.run].forEach((button) => { button.disabled = !auth.can('RunInspection'); });
   }
 }
 
-const runProgram = (options) => exclusive(() => runProgramOnce(options));
+const runProgram = (options) => {
+  if (!auth.can('RunInspection')) { showToast('Requires the RunInspection permission.', 'error'); return null; }
+  return exclusive(() => runProgramOnce(options));
+};
 
 async function runProgramOnce({ record = true } = {}) {
   const started = performance.now();
@@ -994,6 +1001,20 @@ async function runProgramOnce({ record = true } = {}) {
         }
       }
       result.ms = performance.now() - t0;
+      // Drift (SPC run rule): still within limits, but two consecutive inspections beyond
+      // DRIFT_SIGMA on the same side of the mean learned from good parts.
+      if (record && step.learned?.std > 0 && typeof result.value === 'number') {
+        // σ is floored at half the tool's resolution: a very tight learned spread (e.g. a
+        // caliper at sub-pixel noise level) would otherwise turn quantisation into false alarms.
+        const sigma = Math.max(step.learned.std, (LIMIT_RULES[step.tool]?.resolution || 0) / 2);
+        const z = (result.value - step.learned.mean) / sigma;
+        const previous = pgm.lastZ[step.id] ?? 0;
+        pgm.lastZ[step.id] = z;
+        if (result.status === 'PASS' && Math.abs(z) > DRIFT_SIGMA && Math.abs(previous) > DRIFT_SIGMA && Math.sign(z) === Math.sign(previous)) {
+          result.drift = z;
+          result.text += ` · drift ${z > 0 ? '+' : ''}${z.toFixed(1)}σ from learned mean (2 in a row)`;
+        }
+      }
       result.rect = rect;
       results[step.id] = result;
       if (step.tool === 'pattern' && step.params.locator === 'yes') {
@@ -1059,7 +1080,8 @@ function showOverall(overall, results, cycle, source, record) {
     .slice(0, 2)
     .map((step) => `${step.name}: ${resultLabel(step, results[step.id])}`);
   const skipped = enabledSteps.filter((step) => results[step.id]?.status === 'SKIPPED').length;
-  const why = problems.length ? ` · ${problems.join(' · ')}${skipped ? ` · ${skipped} skipped` : ''}` : '';
+  const drifting = enabledSteps.filter((step) => results[step.id]?.drift).map((step) => step.name);
+  const why = (problems.length ? ` · ${problems.join(' · ')}${skipped ? ` · ${skipped} skipped` : ''}` : '') + (drifting.length ? ` · ⚠ drift: ${drifting.join(', ')}` : '');
   showToast(`${id}: ${overall} · ${passed}/${enabledSteps.length} steps passed${why}`, overall === 'PASS' ? '' : 'error');
 }
 
@@ -1070,15 +1092,18 @@ const versionLabel = () => `v${pgm.program.version}${pgm.dirty ? '*' : ''}`;
 function renderHeader() {
   pe.product.textContent = pgm.program.product;
   pe.version.textContent = `v${pgm.program.version}`;
-  pe.state.textContent = pgm.dirty ? 'DRAFT · UNSAVED' : 'APPROVED';
-  pe.state.classList.toggle('draft', pgm.dirty);
+  pe.state.textContent = pgm.dirty ? 'DRAFT · UNSAVED' : pgm.pending ? 'CHANGE PENDING APPROVAL' : 'APPROVED';
+  pe.state.classList.toggle('draft', pgm.dirty || Boolean(pgm.pending));
+  pe.user.textContent = auth.user ? `${auth.user.name} · ${auth.roleLabel(auth.user.role)}` : '';
+  pe.save.textContent = auth.can('ApproveRecipe') ? 'Save & approve new version' : 'Submit for approval';
+  renderApproval();
   if (pe.statusRecipe) pe.statusRecipe.textContent = `Recipe ${versionLabel()}`;
   pe.pxPerMm.value = pgm.program.pxPerMm;
   const locked = !canEdit();
   pe.card.classList.toggle('locked', locked);
   pe.permissionNote.hidden = !locked;
   // Static controls follow the role both ways; re-rendered controls only need locking.
-  [pe.pxPerMm, pe.reason, pe.save, pe.revert].forEach((control) => { control.disabled = locked; });
+  [pe.pxPerMm, pe.reason, pe.save, pe.revert, pe.learn].forEach((control) => { control.disabled = locked; });
   if (locked) {
     pe.card.querySelectorAll('.tool-library button, .step-order button, .step-remove, .step-editor input, .step-editor select, .step-editor button[data-edit]')
       .forEach((control) => { control.disabled = true; });
@@ -1097,6 +1122,7 @@ function renderLibrary() {
 
 function statusChip(result) {
   if (!result) return '<span class="step-status">NOT RUN</span>';
+  if (result.drift) return `<span class="step-status drift" title="Passing, but drifting from the learned good-part values">PASS ⚠</span>`;
   return `<span class="step-status ${result.status.toLowerCase()}">${result.status}</span>`;
 }
 
@@ -1246,7 +1272,7 @@ function renderAudit() {
       <strong>${escapeHtml(entry.user)} · ${escapeHtml(entry.action)}</strong>
       <span>${escapeHtml(entry.object)}: ${escapeHtml(entry.oldValue)} → ${escapeHtml(entry.newValue)}</span>
       <small>Reason: ${escapeHtml(entry.reason)}${entry.changes?.length ? ` · ${escapeHtml(entry.changes.join('; '))}` : ''}</small></li>`).join('')
-    || '<li class="empty">No recipe changes recorded yet.</li>';
+    || '<li class="empty">No changes recorded yet.</li>';
 }
 
 function renderAll() {
@@ -1407,6 +1433,7 @@ function describeChanges(before, after) {
     if (old.enabled !== step.enabled) changes.push(`${step.enabled ? 'enabled' : 'disabled'} “${step.name}”`);
     if (old.criteria.min !== step.criteria.min || old.criteria.max !== step.criteria.max) changes.push(`“${step.name}” limits ${old.criteria.min}–${old.criteria.max} → ${step.criteria.min}–${step.criteria.max}`);
     if (JSON.stringify(old.roi) !== JSON.stringify(step.roi)) changes.push(`“${step.name}” ROI moved`);
+    if (step.learned && old.learned?.at !== step.learned.at) changes.push(`“${step.name}” limits learned from ${step.learned.n} good parts`);
     if (JSON.stringify(old.params) !== JSON.stringify(step.params)) changes.push(`“${step.name}” parameters changed`);
     if (old.fixed !== step.fixed) changes.push(`“${step.name}” ROI ${step.fixed ? 'fixed in image' : 'follows locator'}`);
     if (JSON.stringify(old.reference?.people?.map((p) => p.name)) !== JSON.stringify(step.reference?.people?.map((p) => p.name))) changes.push(`“${step.name}” enrolled people: ${(step.reference?.people || []).map((p) => p.name).join(', ') || 'none'}`);
@@ -1418,32 +1445,98 @@ function describeChanges(before, after) {
   return changes;
 }
 
+function nextVersion(version) {
+  const [major, minor] = version.split('.').map(Number);
+  return `${major}.${minor + 1}`;
+}
+
+function addAudit(entry) {
+  pgm.audit.push(entry);
+  persist();
+  renderAudit();
+}
+
+const recipeAudit = (action, oldValue, newValue, reason, changes) => addAudit({
+  time: new Date().toISOString(), user: auditUser(), action, object: `${pgm.program.product} recipe`, oldValue, newValue, reason, changes,
+});
+
+// Users with ApproveRecipe save an approved version directly. Others submit the change for
+// approval by a different person (four-eyes principle; intent.md ModifyRecipe / ApproveRecipe).
 function saveVersion() {
+  if (!canEdit()) { showToast('Requires the ModifyRecipe permission.', 'error'); return; }
   if (!pgm.dirty) { showToast('No changes to save.'); return; }
   const reason = pe.reason.value.trim();
-  if (!reason) { pe.reason.focus(); showToast('Enter a reason for the change before saving a new version.', 'error'); return; }
+  if (!reason) { pe.reason.focus(); showToast('Enter a reason for the change first.', 'error'); return; }
   const invalid = pgm.program.steps.find((s) => !(s.criteria.min <= s.criteria.max));
   if (invalid) { showToast(`“${invalid.name}”: minimum must not exceed maximum.`, 'error'); return; }
-  const oldVersion = pgm.approved.version;
-  const [major, minor] = oldVersion.split('.').map(Number);
-  pgm.program.version = `${major}.${minor + 1}`;
-  pgm.audit.push({
-    time: new Date().toISOString(),
-    user: `Sakthi M. (${pe.role.selectedOptions[0].textContent})`,
-    action: 'ModifyRecipe',
-    object: `${pgm.program.product} recipe`,
-    oldValue: `v${oldVersion}`,
-    newValue: `v${pgm.program.version}`,
-    reason,
-    changes: describeChanges(pgm.approved, pgm.program),
-  });
-  pgm.approved = clone(pgm.program);
+  const changes = describeChanges(pgm.approved, pgm.program);
+  if (auth.can('ApproveRecipe')) {
+    if (pgm.pending) recipeAudit('RejectRecipe', `change by ${pgm.pending.submittedBy}`, 'superseded', 'Superseded by a newer approved version');
+    pgm.pending = null;
+    const oldVersion = pgm.approved.version;
+    pgm.program.version = nextVersion(oldVersion);
+    pgm.approved = clone(pgm.program);
+    pgm.dirty = false;
+    pe.reason.value = '';
+    recipeAudit('ApproveRecipe', `v${oldVersion}`, `v${pgm.program.version}`, reason, changes);
+    renderAll();
+    showToast(`Recipe saved and approved as v${pgm.program.version}.`);
+    return;
+  }
+  pgm.pending = { program: clone(pgm.program), baseVersion: pgm.approved.version, submittedBy: auditUser(), submittedById: auth.user.id, time: new Date().toISOString(), reason, changes };
   pgm.dirty = false;
   pe.reason.value = '';
-  persist();
+  recipeAudit('SubmitRecipe', `v${pgm.approved.version}`, 'pending approval', reason, changes);
   renderAll();
-  showToast(`Recipe saved as v${pgm.program.version}. Change recorded in the audit trail.`);
+  showToast('Change submitted for approval by a Quality engineer.');
 }
+
+function approvePending() {
+  const pending = pgm.pending;
+  if (!pending || !auth.can('ApproveRecipe')) return;
+  if (pending.submittedById === auth.user.id) { showToast('A different person must approve this change.', 'error'); return; }
+  const oldVersion = pgm.approved.version;
+  pgm.approved = { ...clone(pending.program), version: nextVersion(oldVersion) };
+  pgm.program = clone(pgm.approved);
+  pgm.pending = null;
+  pgm.dirty = false;
+  pgm.lastResults = {};
+  if (!stepById(pgm.selectedId)) pgm.selectedId = pgm.program.steps[0]?.id ?? null;
+  recipeAudit('ApproveRecipe', `v${oldVersion}`, `v${pgm.approved.version}`, `Approved change by ${pending.submittedBy}: ${pending.reason}`, pending.changes);
+  renderAll();
+  showToast(`Change approved. Recipe v${pgm.approved.version} is now active.`);
+}
+
+function rejectPending(reason) {
+  const pending = pgm.pending;
+  if (!pending || !auth.can('ApproveRecipe')) return;
+  if (!reason) { showToast('Enter a reason for rejecting the change.', 'error'); return; }
+  pgm.pending = null;
+  if (!pgm.dirty) { pgm.program = clone(pgm.approved); pgm.lastResults = {}; }
+  if (!stepById(pgm.selectedId)) pgm.selectedId = pgm.program.steps[0]?.id ?? null;
+  recipeAudit('RejectRecipe', `change by ${pending.submittedBy}`, 'rejected', reason);
+  renderAll();
+  showToast('Change rejected. The approved recipe stays active.');
+}
+
+function renderApproval() {
+  const pending = pgm.pending;
+  pe.approval.hidden = !pending;
+  if (!pending) return;
+  const mayApprove = auth.can('ApproveRecipe') && pending.submittedById !== auth.user?.id;
+  pe.approval.innerHTML = `<div><strong>Change pending approval</strong>
+      <span>Submitted by ${escapeHtml(pending.submittedBy)} · ${new Date(pending.time).toLocaleString('en-GB')} · based on v${escapeHtml(pending.baseVersion)}</span>
+      <small>Reason: ${escapeHtml(pending.reason)}${pending.changes?.length ? ` · ${escapeHtml(pending.changes.join('; '))}` : ''}</small></div>
+    ${mayApprove ? '<div class="approval-actions"><input type="text" id="rejectReason" placeholder="Reason (for rejecting)" /><button type="button" class="secondary-button danger" data-approval="reject">Reject</button><button type="button" class="primary-button" data-approval="approve">Approve</button></div>'
+      : `<em>${auth.can('ApproveRecipe') ? 'Another approver must review your own change.' : 'Waiting for a Quality engineer to approve.'}</em>`}`;
+}
+
+pe.approval.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-approval]');
+  if (!button) return;
+  if (button.dataset.approval === 'approve') approvePending();
+  else rejectPending(pe.approval.querySelector('#rejectReason').value.trim());
+});
 
 function revertChanges() {
   if (!pgm.dirty) return;
@@ -1457,7 +1550,7 @@ function revertChanges() {
 
 function persist() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ program: pgm.approved, audit: pgm.audit }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ program: pgm.approved, audit: pgm.audit, pending: pgm.pending }));
   } catch {
     showToast('Recipe saved for this session only; browser storage is unavailable.', 'error');
   }
@@ -1631,11 +1724,125 @@ pe.pxPerMm.addEventListener('change', () => {
   markDirty();
 });
 
-pe.role.addEventListener('change', () => {
-  pgm.role = pe.role.value;
+// Re-render when the signed-in user changes (permissions differ per role).
+auth.onChange(() => {
+  if (!pgm.program) return;
   if (pgm.drawing) stopDrawing();
   renderAll();
-  showToast(canEdit() ? 'Quality engineer: recipe editing enabled.' : 'Operator: recipe is read-only.');
+});
+
+/* ---------- Learn pass limits from good parts (statistical ML) ---------- */
+
+// For each measuring tool: which side of the limits to learn, and the smallest meaningful margin.
+// 'both' = two-sided; 'lower' = higher is better (only a minimum); 'upper' = lower is better.
+const LIMIT_RULES = {
+  pattern: { side: 'lower', resolution: 0.02, floor: 0, ceil: 1 },
+  brightness: { side: 'both', resolution: 2, floor: 0, ceil: 255 },
+  pixelCount: { side: 'both', resolution: 1, floor: 0, ceil: 100 },
+  blob: { side: 'both', resolution: 0, floor: 0, integer: true },
+  edgeWidth: { side: 'both', resolution: 0.05, floor: 0 },
+  color: { side: 'lower', resolution: 1, floor: 0, ceil: 100 },
+  colorId: { side: 'lower', resolution: 2, floor: 0, ceil: 100 },
+  contrast: { side: 'upper', resolution: 0.5, floor: 0 },
+};
+const LEARN_SIGMA = 4;  // limits at mean ± 4σ of good parts
+const DRIFT_SIGMA = 2.5; // two consecutive passing values beyond 2.5σ, same side → drift
+
+function proposeLimits(step, values) {
+  const rule = LIMIT_RULES[step.tool];
+  const { mean, std } = stats(values);
+  const margin = Math.max(LEARN_SIGMA * std, rule.resolution);
+  const decimals = TOOLS[step.tool].digits + 1;
+  const round = (v) => (rule.integer ? Math.round(v) : Number(v.toFixed(decimals)));
+  let min = rule.side === 'upper' ? (rule.floor ?? step.criteria.min) : mean - margin;
+  let max = rule.side === 'lower' ? (rule.ceil ?? step.criteria.max) : mean + margin;
+  if (rule.integer) { min = Math.ceil(min - 1e-9); max = Math.floor(max + 1e-9); }
+  if (rule.floor !== undefined) min = Math.max(rule.floor, min);
+  if (rule.ceil !== undefined) max = Math.min(rule.ceil, max);
+  return { mean, std, n: values.length, min: round(min), max: round(max), minValue: Math.min(...values), maxValue: Math.max(...values) };
+}
+
+const learnEls = { dialog: document.querySelector('#learnDialog'), body: document.querySelector('#learnBody') };
+let learnProposals = null;
+
+function openLearnDialog() {
+  if (!canEdit()) { showToast('Requires the ModifyRecipe permission.', 'error'); return; }
+  const learnable = pgm.program.steps.filter((step) => step.enabled && LIMIT_RULES[step.tool]);
+  const others = pgm.program.steps.filter((step) => step.enabled && !LIMIT_RULES[step.tool]);
+  learnProposals = null;
+  learnEls.body.innerHTML = `<p class="settings-hint">The program runs on <b>${auth.settings.learnSamples} good parts</b> (one every 0.4 s: present a different good part each time, or use the simulated line). For every measuring tool the app learns the normal spread and proposes pass limits at the mean ± ${LEARN_SIGMA}σ — one-sided where only one direction is bad. You review them before anything changes. Later inspections flag <b>drift</b> when two in a row are beyond ${DRIFT_SIGMA}σ on the same side, even while they still pass.</p>
+    <ul class="learn-scope">${learnable.map((step) => `<li>${TOOLS[step.tool].icon} ${escapeHtml(step.name)}</li>`).join('') || '<li class="empty">No enabled measuring steps.</li>'}</ul>
+    ${others.length ? `<p class="settings-hint">Not included (they learn on their own): ${others.map((step) => escapeHtml(step.name)).join(', ')}.</p>` : ''}
+    <div class="learn-progress" id="learnProgress" hidden><i></i><span></span></div>
+    <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Cancel</button><button type="button" class="primary-button" id="startLearn" ${learnable.length ? '' : 'disabled'}>Start learning</button></div>`;
+  learnEls.dialog.hidden = false;
+}
+
+async function learnLimitsOnce() {
+  const learnable = pgm.program.steps.filter((step) => step.enabled && LIMIT_RULES[step.tool]);
+  const values = Object.fromEntries(learnable.map((step) => [step.id, []]));
+  const total = auth.settings.learnSamples;
+  const progress = learnEls.body.querySelector('#learnProgress');
+  progress.hidden = false;
+  learnEls.body.querySelector('#startLearn').disabled = true;
+  for (let i = 0; i < total; i += 1) {
+    if (learnEls.dialog.hidden) throw new Error('Learning cancelled.');
+    if (i) await new Promise((resolve) => window.setTimeout(resolve, 400));
+    await runProgramOnce({ record: false });
+    for (const step of learnable) {
+      const r = pgm.lastResults[step.id];
+      if (!r || r.status === 'ERROR' || r.status === 'SKIPPED' || typeof r.value !== 'number') {
+        throw new Error(`“${step.name}” could not be measured on part ${i + 1} (${r?.text || 'not run'}). Fix the step, then learn again.`);
+      }
+      values[step.id].push(r.value);
+    }
+    progress.querySelector('i').style.width = `${((i + 1) / total) * 100}%`;
+    progress.querySelector('span').textContent = `Good part ${i + 1} of ${total}`;
+  }
+  learnProposals = learnable.map((step) => ({ step, ...proposeLimits(step, values[step.id]) }));
+  renderLearnReview();
+}
+
+function renderLearnReview() {
+  const fmt = (step, v) => formatValue(step.tool, v);
+  learnEls.body.innerHTML = `<p class="settings-hint">Learned from ${learnProposals[0]?.n || 0} good parts. Tick the limits to apply; they become a draft change that must be saved (and approved) like any other.</p>
+    <div class="table-wrap"><table class="learn-table">
+      <thead><tr><th></th><th>STEP</th><th>LEARNED (MEAN ± σ)</th><th>RANGE SEEN</th><th>CURRENT LIMITS</th><th>PROPOSED LIMITS</th></tr></thead>
+      <tbody>${learnProposals.map((row, i) => {
+        const unit = TOOLS[row.step.tool].unit;
+        const changed = row.min !== row.step.criteria.min || row.max !== row.step.criteria.max;
+        const failsNow = row.minValue < row.step.criteria.min || row.maxValue > row.step.criteria.max;
+        return `<tr class="${failsNow ? 'warn' : ''}"><td><input type="checkbox" data-apply="${i}" ${changed ? 'checked' : ''} aria-label="Apply to ${escapeHtml(row.step.name)}" /></td>
+          <td><strong>${escapeHtml(row.step.name)}</strong><small>${TOOLS[row.step.tool].label}</small></td>
+          <td>${fmt(row.step, row.mean)} ± ${row.std.toFixed(TOOLS[row.step.tool].digits + 1)} ${unit}</td>
+          <td>${fmt(row.step, row.minValue)} – ${fmt(row.step, row.maxValue)}${failsNow ? '<small>some good parts fail the current limits</small>' : ''}</td>
+          <td>${row.step.criteria.min} – ${row.step.criteria.max}</td>
+          <td><b>${row.min} – ${row.max}</b> ${unit}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div>
+    <div class="modal-actions"><button type="button" class="secondary-button" data-close-modal>Close</button><button type="button" class="primary-button" id="applyLearned">Apply selected limits</button></div>`;
+}
+
+function applyLearned() {
+  const selected = [...learnEls.body.querySelectorAll('[data-apply]:checked')].map((box) => learnProposals[Number(box.dataset.apply)]);
+  const at = new Date().toISOString();
+  learnProposals.forEach((row) => { row.step.learned = { mean: row.mean, std: row.std, n: row.n, at }; });
+  selected.forEach((row) => { row.step.criteria = { min: row.min, max: row.max }; });
+  markDirty();
+  renderEditor();
+  learnEls.dialog.hidden = true;
+  showToast(`Learned limits applied to ${selected.length} step${selected.length === 1 ? '' : 's'}; drift monitoring on for ${learnProposals.length}. Save to keep them.`);
+}
+
+pe.learn.addEventListener('click', openLearnDialog);
+learnEls.body.addEventListener('click', (event) => {
+  if (event.target.closest('#startLearn')) {
+    exclusive(() => learnLimitsOnce()).catch((error) => {
+      showToast(`Learning stopped: ${error.message}`, 'error');
+      if (!learnEls.dialog.hidden) openLearnDialog();
+    });
+  }
+  if (event.target.closest('#applyLearned')) applyLearned();
 });
 
 pe.save.addEventListener('click', saveVersion);
@@ -1659,6 +1866,7 @@ async function initProgram() {
   if (stored) {
     pgm.program = stored.program;
     pgm.audit = stored.audit || [];
+    pgm.pending = stored.pending || null;
   } else {
     pgm.program = defaultProgram();
     // Teach the pattern and colour references from the simulated part so the demo runs out of the box.
@@ -1669,6 +1877,7 @@ async function initProgram() {
   }
   pgm.approved = clone(pgm.program);
   pgm.selectedId = pgm.program.steps[0]?.id ?? null;
+  auth.setAuditSink(addAudit);
   renderAll();
   preloadFaceModels();
 }

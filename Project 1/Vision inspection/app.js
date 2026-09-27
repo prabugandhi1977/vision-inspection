@@ -305,4 +305,3 @@ document.querySelector('#allResults').addEventListener('click', () => showToast(
 document.querySelector('#periodButton').addEventListener('click', () => showToast('Showing defect distribution for Shift 1.'));
 document.querySelector('#notifications').addEventListener('click', () => showToast('2 notifications: retention review and scheduled calibration.'));
 document.querySelector('#helpButton').addEventListener('click', () => showToast('Operator help: acknowledge alarms or contact your line lead.'));
-document.querySelector('#profileButton').addEventListener('click', () => showToast('Signed in as Sakthi M. · Production operator.'));

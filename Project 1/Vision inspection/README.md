@@ -58,6 +58,35 @@ The **AI anomaly** tool learns what a good part looks like instead of relying on
 - **Workflow:** add *AI anomaly*, draw the ROI over the part, then *Learn good part* / *Learn 10 frames* with only good parts (about 20 recommended). A learned part that looks very different from the rest is ignored for the limit and reported.
 - **Demo:** on the simulated part (which now has slight position, lighting, and sensor-noise variation), use **Add defect** to put a scratch or stain on the part. In testing with 20 learned parts, 20/20 good parts passed (scores 43–91) and 20/20 defective parts failed (scores 132–441), at about 85 ms per inspection.
 
+## Sign-in, roles, and settings (demo)
+
+The dashboard opens with a sign-in screen. Roles and function-based permissions follow `intent.md`:
+
+| Permission | Operator | Quality engineer | Production engineer | Administrator |
+| --- | :-: | :-: | :-: | :-: |
+| RunInspection | ✓ | ✓ | ✓ | ✓ |
+| ViewReports | ✓ | ✓ | ✓ | ✓ |
+| ModifyRecipe |  | ✓ | ✓ | ✓ |
+| ApproveRecipe |  | ✓ |  | ✓ |
+| ConfigureCamera |  |  | ✓ | ✓ |
+| ManageUsers |  |  |  | ✓ |
+| ManageSettings |  |  |  | ✓ |
+
+Demo accounts: `operator` / `operator123`, `quality` / `quality123`, `production` / `production123`, `admin` / `admin123`.
+
+- **Recipe approval (four-eyes):** a user without *ApproveRecipe* submits changes for approval; a different user with *ApproveRecipe* approves (new version) or rejects (with a reason).
+- **Sessions:** sign-in survives a page reload and ends after the configured inactivity time; 5 failed attempts lock sign-in for 30 s.
+- **Settings (Administrator):** users (add, change role, reset password, deactivate — at least one active administrator is kept), station and line names, session timeout, number of good parts for *Learn limits*, and PASS/FAIL image-retention days.
+- **Audit trail:** sign-in/out, recipe submit/approve/reject, user and settings changes, with user, old → new value, and reason.
+
+This sign-in runs entirely in the browser (users, salted SHA-256 password hashes, and settings in local storage). It demonstrates the workflow but is **not real security**; production needs server-side authentication.
+
+## Learn limits from good parts (statistical ML)
+
+**Learn limits** (needs *ModifyRecipe*) runs the program on the configured number of good parts (default 20) and learns each measuring tool's normal spread. It proposes pass limits at mean ± 4σ — one-sided where only one direction is bad (pattern score and colour match: minimum only; surface contrast: maximum only; blob count: whole numbers) — never tighter than the tool's resolution. Proposals are reviewed in a table and applied as a draft change that is saved or approved like any other.
+
+After learning, **drift** is flagged when two consecutive inspections are more than 2.5σ from the learned mean on the same side while still passing (an SPC run rule), shown as *PASS ⚠* on the step and in the result message. In testing: 40 normal parts gave no drift alarms; a 4σ process shift was flagged on the second inspection. AI anomaly and Face ID steps learn on their own and are not included.
+
 ## Web camera setup
 
 1. Open the local dashboard and select **Configure camera**.

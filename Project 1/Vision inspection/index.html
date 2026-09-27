@@ -25,17 +25,18 @@
           <a class="nav-item" href="#recipes" data-view="Recipes"><span class="nav-icon">◫</span>Recipes</a>
           <a class="nav-item" href="#analytics" data-view="Analytics"><span class="nav-icon">⌁</span>Analytics</a>
           <a class="nav-item" href="#alarms" data-view="Alarms"><span class="nav-icon">△</span>Alarms</a>
+          <a class="nav-item" href="#settings" data-view="Settings" id="settingsNav" hidden><span class="nav-icon">⚙</span>Settings</a>
         </nav>
 
         <div class="sidebar-bottom">
           <div class="station-card">
             <span class="eyebrow">ACTIVE STATION</span>
-            <strong>Station 01 <b>●</b></strong>
-            <small>LINE A · CELL 04</small>
+            <strong><span id="stationName">Station 01</span> <b>●</b></strong>
+            <small id="lineName">LINE A · CELL 04</small>
           </div>
           <button class="operator" type="button" id="profileButton">
-            <span class="avatar">SM</span>
-            <span><strong>Sakthi M.</strong><small>Production operator</small></span>
+            <span class="avatar" id="userAvatar">SM</span>
+            <span><strong id="userName">Sakthi M.</strong><small id="userRole">Operator</small></span>
             <b>···</b>
           </button>
         </div>
@@ -45,7 +46,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow">PRODUCTION / LINE A</p>
-            <h1>Good morning, Sakthi <span>⌄</span></h1>
+            <h1><span id="greeting">Good morning, Sakthi</span> <span>⌄</span></h1>
           </div>
           <div class="topbar-actions">
             <span class="shift"><i></i> SHIFT 1 <b>06:00–14:00</b></span>
@@ -57,7 +58,7 @@
         <section class="status-strip" aria-label="Current production state">
           <div class="running-status"><span class="pulse"></span><strong>RUNNING</strong><span>Component_A</span><b>Recipe v1.2</b></div>
           <div class="connection-status"><span><i class="connected"></i> Camera <b>Connected</b></span><span><i class="connected"></i> PLC <b>Connected</b></span><span><i class="machine"></i> Machine <b>Auto</b></span></div>
-          <button class="stop-button" type="button" id="runControl"><span>Ⅱ</span> Pause line</button>
+          <button class="stop-button" type="button" id="runControl" data-permission="RunInspection"><span>Ⅱ</span> Pause line</button>
         </section>
 
         <section class="metrics" aria-label="Today at a glance">
@@ -71,7 +72,7 @@
           <article class="live-card card" id="inspection">
             <div class="card-heading">
               <div><span class="eyebrow">LIVE INSPECTION</span><h2>Current part <span class="live-dot">● LIVE</span></h2></div>
-              <button class="camera-config-button" type="button" id="openCameraButton">Configure camera</button>
+              <button class="camera-config-button" type="button" id="openCameraButton" data-permission="ConfigureCamera">Configure camera</button>
             </div>
             <div class="camera-frame" id="cameraFrame" aria-label="Camera view of current component">
               <div class="camera-tag">CAM 01 <span id="cameraIndicator">●</span><strong id="cameraStatus">SIMULATED</strong></div>
@@ -110,10 +111,10 @@
               <div><span>PART ID</span><strong id="partId">A001248</strong></div>
               <div><span>ELAPSED TIME</span><strong id="elapsedTime">0.84 sec</strong></div>
               <div class="result-indicator" id="overallResult"><span>LAST RESULT</span><strong><i></i> PASS</strong></div>
-              <button class="capture-button" type="button" id="captureButton">Capture frame</button>
-              <button class="inspect-button" type="button" id="inspectButton">Inspect</button>
-              <button type="button" class="defect-button" id="defectButton" aria-pressed="false" title="Add a scratch or stain to the simulated part to test AI anomaly detection">Add defect</button>
-              <button type="button" id="simulateButton">Simulate part <span>→</span></button>
+              <button class="capture-button" type="button" id="captureButton" data-permission="RunInspection">Capture frame</button>
+              <button class="inspect-button" type="button" id="inspectButton" data-permission="RunInspection">Inspect</button>
+              <button type="button" class="defect-button" id="defectButton" data-permission="RunInspection" aria-pressed="false" title="Add a scratch or stain to the simulated part to test AI anomaly detection">Add defect</button>
+              <button type="button" id="simulateButton" data-permission="RunInspection">Simulate part <span>→</span></button>
             </div>
           </article>
 
@@ -137,15 +138,12 @@
               <h2 id="programTitle"><span id="programProduct">Component_A</span> · Recipe <span id="programVersion">v1.2</span> <span class="program-state" id="programState">APPROVED</span></h2>
             </div>
             <div class="program-actions">
-              <label class="role-select">ROLE
-                <select id="roleSelect">
-                  <option value="quality">Quality engineer</option>
-                  <option value="operator">Operator</option>
-                </select>
-              </label>
-              <button class="primary-button" type="button" id="runInspectionButton">Run inspection</button>
+              <span class="signed-in" id="programUser">Signed in</span>
+              <button class="secondary-button" type="button" id="learnLimitsButton" title="Run good parts and let the app propose pass limits for every tool">Learn limits</button>
+              <button class="primary-button" type="button" id="runInspectionButton" data-permission="RunInspection">Run inspection</button>
             </div>
           </div>
+          <div class="approval-banner" id="approvalBanner" hidden></div>
           <ol class="workflow" aria-label="Inspection program workflow">
             <li><b>1</b><span>Acquire image<small>Camera · captured frame</small></span></li>
             <li><b>2</b><span>Locate part<small>Pattern locator · position adjust</small></span></li>
@@ -153,7 +151,7 @@
             <li><b>4</b><span>Judge criteria<small>Min / max limits</small></span></li>
             <li><b>5</b><span>Save &amp; approve<small>Versioned · audited</small></span></li>
           </ol>
-          <p class="permission-note" id="permissionNote" hidden>Operator role: you can run the program, but changing tools, ROIs, or criteria needs the <b>ModifyRecipe</b> permission.</p>
+          <p class="permission-note" id="permissionNote" hidden>Your role can run the program, but changing tools, ROIs, or criteria needs the <b>ModifyRecipe</b> permission.</p>
           <div class="program-grid">
             <div class="tool-library">
               <h3>Tool library</h3>
@@ -234,8 +232,62 @@
       </section>
     </div>
 
+    <div class="login-screen" id="loginScreen" hidden>
+      <form class="login-panel" id="loginForm" autocomplete="off">
+        <div class="brand login-brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>VISION<span>FORGE</span></span></div>
+        <h2>Sign in to <span id="loginStation">Station 01</span></h2>
+        <label for="loginUser">USERNAME</label>
+        <input id="loginUser" type="text" autocomplete="username" required />
+        <label for="loginPassword">PASSWORD</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+        <p class="login-error" id="loginError" role="alert" hidden></p>
+        <button class="primary-button" type="submit" id="loginSubmit">Sign in</button>
+        <div class="demo-accounts">
+          <span class="eyebrow">DEMO ACCOUNTS · select to fill</span>
+          <div id="demoAccounts"></div>
+          <small>Demo sign-in runs entirely in this browser and is not real security.</small>
+        </div>
+      </form>
+    </div>
+
+    <div class="profile-menu" id="profileMenu" hidden>
+      <button type="button" data-open-settings="account">My account</button>
+      <button type="button" data-open-settings="users" data-permission="ManageUsers">Users &amp; roles</button>
+      <button type="button" data-open-settings="station" data-permission="ManageSettings">Station settings</button>
+      <button type="button" id="logoutButton">Sign out</button>
+    </div>
+
+    <div class="modal" id="settingsDialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+      <div class="modal__backdrop" data-close-modal></div>
+      <section class="modal__panel settings-panel">
+        <header>
+          <div><span class="eyebrow">ADMINISTRATION</span><h2 id="settingsTitle">Settings</h2></div>
+          <button class="dialog-close" type="button" data-close-modal aria-label="Close settings">×</button>
+        </header>
+        <nav class="settings-tabs" id="settingsTabs">
+          <button type="button" data-tab="account">My account</button>
+          <button type="button" data-tab="users" data-permission="ManageUsers">Users</button>
+          <button type="button" data-tab="roles">Roles &amp; permissions</button>
+          <button type="button" data-tab="station" data-permission="ManageSettings">Station &amp; data</button>
+        </nav>
+        <div class="settings-body" id="settingsBody"></div>
+      </section>
+    </div>
+
+    <div class="modal" id="learnDialog" role="dialog" aria-modal="true" aria-labelledby="learnTitle" hidden>
+      <div class="modal__backdrop" data-close-modal></div>
+      <section class="modal__panel learn-panel">
+        <header>
+          <div><span class="eyebrow">MACHINE LEARNING</span><h2 id="learnTitle">Learn pass limits from good parts</h2></div>
+          <button class="dialog-close" type="button" data-close-modal aria-label="Close">×</button>
+        </header>
+        <div id="learnBody"></div>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
+    <script src="auth.js"></script>
     <script src="inspection.js"></script>
   </body>
 </html>
