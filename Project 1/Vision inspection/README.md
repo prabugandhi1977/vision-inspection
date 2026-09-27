@@ -38,6 +38,7 @@ The **Inspection program** section configures what is inspected and how each res
 | Color identify | Names the dominant colour (Red, Orange, Yellow, Green, Cyan, Blue, Purple, Pink, Brown, White, Grey, Black); can require an expected colour | Keyence Color Area · Omron Color Data |
 | Face ID | Detects faces and names enrolled people (others: *Unknown*); value is match confidence | Deep-learning face recognition (face-api.js) |
 | Surface contrast | Grey-level standard deviation (scratches, stains) | Cognex Contrast · Omron Defect |
+| AI anomaly | Learns good parts and scores how unusual a new part is (100 = limit of normal); heatmap shows where | Cognex Red Analyze (VisionPro Deep Learning) · MVTec HALCON Anomaly Detection · Keyence IV3 AI |
 
 **Colour names** appear in the results for *Color match* and *Color identify*.
 
@@ -46,6 +47,16 @@ The **Inspection program** section configures what is inspected and how each res
 To configure a step: select a tool in the **Tool library**, select **Draw ROI on image** and drag on the camera view, adjust the tool parameters, **Teach reference** for pattern and colour tools, then set the pass limits. **Test program** runs without recording a part; **Run inspection** / **Inspect** records the result. The *Operator* role can run the program but cannot change it (`ModifyRecipe`). Saved recipes and the audit trail are stored in the browser's local storage for this prototype.
 
 Any `ERROR` (no image, ROI outside the image, untaught reference) makes the overall result `ERROR`; the program never reports `PASS` for a step it could not evaluate.
+
+## AI anomaly detection
+
+The **AI anomaly** tool learns what a good part looks like instead of relying on hand-set rules.
+
+- **Model:** MobileNetV2 (ImageNet-pretrained, width 0.35, ~1.6 MB) bundled in `models/mobilenet_v2_035/` and run with TensorFlow.js in the browser. Weights: Keras Applications (Apache 2.0), as published for Teachable Machine.
+- **Method (PatchCore-style):** the ROI is scaled so its short side is 224 px and covered by overlapping square tiles. Features from two MobileNetV2 layers form a 14 × 14 grid of patch descriptors per tile. Learning stores the descriptors of good parts; a new part's score is the largest distance from any patch to the nearest good patch at the same or a neighbouring position.
+- **Scale:** scores are normalised by the leave-one-out spread among the learned good parts, so **100 = the limit of normal variation**. Lower the *Maximum* in Pass criteria to make the tool stricter. A heatmap on the camera view shows where the part differs.
+- **Workflow:** add *AI anomaly*, draw the ROI over the part, then *Learn good part* / *Learn 10 frames* with only good parts (about 20 recommended). A learned part that looks very different from the rest is ignored for the limit and reported.
+- **Demo:** on the simulated part (which now has slight position, lighting, and sensor-noise variation), use **Add defect** to put a scratch or stain on the part. In testing with 20 learned parts, 20/20 good parts passed (scores 43–91) and 20/20 defective parts failed (scores 132–441), at about 85 ms per inspection.
 
 ## Web camera setup
 

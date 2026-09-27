@@ -83,6 +83,12 @@ const TOOLS = {
     }],
     defaults: { expected: 'anyEnrolled' }, criteria: { min: 45, max: 100 },
   },
+  anomaly: {
+    label: 'AI anomaly', group: 'AI', icon: '✦', unit: '', digits: 0, learn: true, fixed: true,
+    summary: 'Learns what good parts look like from examples and scores how unusual a new part is (0 = typical, 100 = limit of normal variation). A heatmap shows where the anomaly is. No rules to write: learn about 20 good parts.',
+    refs: 'Cognex Red Analyze (VisionPro Deep Learning) · MVTec HALCON Anomaly Detection · Keyence IV3 AI',
+    params: [], defaults: {}, criteria: { min: 0, max: 100 },
+  },
   contrast: {
     label: 'Surface contrast', group: 'Defect', icon: '≋', unit: 'σ', digits: 1,
     summary: 'Grey-level standard deviation. Scratches, stains, and dents raise it above a clean surface.',
@@ -157,11 +163,11 @@ function defaultProgram() {
   return {
     product: 'Component_A',
     version: '1.2',
-    pxPerMm: 3.1,
+    pxPerMm: 3.086,
     steps: [
-      makeStep('pattern', 'Part locator', { x: 0.40, y: 0.33, w: 0.20, h: 0.34 }),
+      makeStep('pattern', 'Part locator', { x: 0.40, y: 0.33, w: 0.20, h: 0.34 }, { criteria: { min: 0.7, max: 1 } }),
       makeStep('pixelCount', 'Part presence', { x: 0.14, y: 0.30, w: 0.72, h: 0.42 }, { params: { threshold: 100, polarity: 'bright' }, criteria: { min: 40, max: 100 } }),
-      makeStep('edgeWidth', 'Hole Ø (left)', { x: 0.2505, y: 0.531, w: 0.075, h: 0.04 }, { criteria: { min: 9.7, max: 10.3 } }),
+      makeStep('edgeWidth', 'Hole Ø (left)', { x: 0.254, y: 0.531, w: 0.068, h: 0.04 }, { criteria: { min: 9.7, max: 10.3 } }),
       makeStep('blob', 'Hole present (right)', { x: 0.648, y: 0.44, w: 0.12, h: 0.22 }, { params: { threshold: 40, polarity: 'dark', minArea: 30 }, criteria: { min: 1, max: 1 } }),
       makeStep('color', 'Label colour', { x: 0.45, y: 0.43, w: 0.10, h: 0.15 }),
       makeStep('contrast', 'Surface finish', { x: 0.345, y: 0.42, w: 0.055, h: 0.12 }, { criteria: { min: 0, max: 12 } }),
@@ -171,8 +177,25 @@ function defaultProgram() {
 
 /* ---------- Image acquisition ---------- */
 
+// Places a scratch/stain at a random spot on the part (only while "Add defect" is on).
+const DEFECT_SPOTS = [[272, 160], [500, 165], [380, 246], [150, 240], [640, 150]];
+function updateSimulatedDefect() {
+  const group = document.querySelector('#simDefect');
+  if (!pgm.simDefect) { group.setAttribute('display', 'none'); return 'none'; }
+  const [x, y] = DEFECT_SPOTS[Math.floor(Math.random() * DEFECT_SPOTS.length)];
+  const angle = Math.round(Math.random() * 160 - 80);
+  const kind = Math.floor(Math.random() * 3); // 0 scratch, 1 stain, 2 both
+  group.setAttribute('display', 'inline');
+  group.setAttribute('transform', `translate(${x} ${y}) rotate(${angle})`);
+  group.querySelector('.sim-scratch').setAttribute('display', kind === 1 ? 'none' : 'inline');
+  group.querySelector('.sim-stain').setAttribute('display', kind === 0 ? 'none' : 'inline');
+  return `${x},${y},${angle},${kind}`;
+}
+
 async function simulationImage() {
-  if (pgm.simImage) return pgm.simImage;
+  const key = updateSimulatedDefect();
+  if (pgm.simImage && pgm.simKey === key) return pgm.simImage;
+  pgm.simKey = key;
   const svg = document.querySelector('.inspection-art svg').cloneNode(true);
   svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   svg.setAttribute('width', '760');
@@ -192,7 +215,23 @@ function drawCover(ctx, source, sw, sh, width, height) {
   ctx.drawImage(source, (width - dw) / 2, (height - dh) / 2, dw, dh);
 }
 
-function drawSimulation(ctx, img, width, height) {
+// Small, realistic part-to-part variation (position, lighting, sensor noise) so learning and
+// limits are exercised as on a real line.
+function simulationVariation() {
+  return { dx: (Math.random() - 0.5) * 0.008, dy: (Math.random() - 0.5) * 0.012, brightness: 0.97 + Math.random() * 0.06, noise: 2.5 };
+}
+
+function addSensorNoise(ctx, width, height, sigma) {
+  const pixels = ctx.getImageData(0, 0, width, height);
+  const d = pixels.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (Math.random() + Math.random() + Math.random() - 1.5) * sigma * 2;
+    d[i] += n; d[i + 1] += n; d[i + 2] += n;
+  }
+  ctx.putImageData(pixels, 0, 0);
+}
+
+function drawSimulation(ctx, img, width, height, variation = { dx: 0, dy: 0, brightness: 1, noise: 0 }) {
   const gradient = ctx.createRadialGradient(width * 0.49, height * 0.45, 0, width * 0.49, height * 0.45, width * 0.55);
   gradient.addColorStop(0, '#385360');
   gradient.addColorStop(0.52, '#152e3a');
@@ -205,13 +244,16 @@ function drawSimulation(ctx, img, width, height) {
   const bw = width - 2 * bx;
   const bh = height - 2 * by;
   const scale = Math.min(bw / 760, bh / 330);
-  ctx.drawImage(img, bx + (bw - 760 * scale) / 2, by + (bh - 330 * scale) / 2, 760 * scale, 330 * scale);
+  ctx.filter = `brightness(${variation.brightness})`;
+  ctx.drawImage(img, bx + (bw - 760 * scale) / 2 + variation.dx * width, by + (bh - 330 * scale) / 2 + variation.dy * height, 760 * scale, 330 * scale);
+  ctx.filter = 'none';
+  if (variation.noise) addSensorNoise(ctx, width, height, variation.noise);
 }
 
 // Returns what the operator sees in the camera view, as a 640 × 320 image, so
 // ROIs drawn on screen map one-to-one onto analysed pixels. `hires` is the same
 // view at twice the resolution, used by face recognition.
-async function acquireImage() {
+async function acquireImage({ ideal = false } = {}) {
   let draw;
   let source = 'SIMULATION';
   if (!els.capturedFrame.hidden && els.capturedFrame.naturalWidth) {
@@ -229,7 +271,8 @@ async function acquireImage() {
     source = 'LIVE CAMERA';
   } else {
     const img = await simulationImage();
-    draw = (ctx, w, h) => drawSimulation(ctx, img, w, h);
+    const variation = ideal ? undefined : simulationVariation();
+    draw = (ctx, w, h) => drawSimulation(ctx, img, w, h, variation);
   }
   const canvas = document.createElement('canvas');
   canvas.width = ANALYSIS_WIDTH;
@@ -391,6 +434,208 @@ function bestMatch(descriptor, people) {
   return { ...best, ambiguous: Boolean(second && best.confidence - second.confidence < AMBIGUITY_MARGIN) };
 }
 
+/* ---------- AI anomaly detection (MobileNetV2 features, PatchCore-style) ---------- */
+
+// A pretrained MobileNetV2 (ImageNet, width 0.35, bundled in models/) turns the ROI into a
+// 14 × 14 grid of patch features. Learning stores the features of good parts; a new part is
+// scored by how far each patch is from the nearest good patch at the same or a neighbouring
+// position. Scores are normalised by the spread among the good parts (leave-one-out), so
+// 100 = the limit of normal variation seen during learning.
+const TFJS_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js';
+const AI_MODEL_URL = 'models/mobilenet_v2_035/model.json';
+const AI_INPUT = 224;
+const AI_GRID = 14;
+const AI_DIMS = 64;          // feature channels kept per patch (fixed random subset of 240)
+const AI_MIN_SAMPLES = 3;
+const AI_MAX_SAMPLES = 30;
+// Deterministic channel subset so stored samples stay comparable across sessions.
+const AI_CHANNELS = (() => {
+  const all = Array.from({ length: 240 }, (_, i) => i);
+  let seed = 20260927;
+  for (let i = all.length - 1; i > 0; i -= 1) {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    const j = seed % (i + 1);
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  return all.slice(0, AI_DIMS).sort((a, b) => a - b);
+})();
+
+let aiReady = null;
+function loadAiModel() {
+  if (!aiReady) {
+    showToast('Loading AI model (MobileNetV2, about 2 MB)…');
+    aiReady = (window.tf ? Promise.resolve() : new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = TFJS_URL;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('TensorFlow.js could not be loaded. Check the internet connection.'));
+      document.head.append(script);
+    })).then(async () => {
+      const base = await tf.loadLayersModel(AI_MODEL_URL);
+      const model = tf.model({ inputs: base.inputs, outputs: [base.getLayer('block_6_expand_relu').output, base.getLayer('block_13_expand_relu').output] });
+      // First WebGL inferences can be wrong while shaders compile; warm up before real use.
+      for (let i = 0; i < 2; i += 1) tf.tidy(() => model.predict(tf.zeros([1, AI_INPUT, AI_INPUT, 3])).forEach((t) => t.dataSync()));
+      return model;
+    });
+    aiReady.catch(() => { aiReady = null; });
+  }
+  return aiReady;
+}
+
+// The ROI is scaled so its short side fills the network input (224 px) and covered by
+// overlapping square tiles along its long side, so wide or tall ROIs keep full detail.
+function tileLayout(rect) {
+  const scale = AI_INPUT / (Math.min(rect.w, rect.h) * HIRES_SCALE);
+  const horizontal = rect.w >= rect.h;
+  const long = Math.max(rect.w, rect.h) * HIRES_SCALE * scale;
+  const count = Math.max(1, Math.ceil(long / AI_INPUT - 0.05));
+  const starts = Array.from({ length: count }, (_, k) => (count === 1 ? 0 : (k * (long - AI_INPUT)) / (count - 1)));
+  // Global grid along the long axis, in feature cells (16 input px per cell).
+  const cellPx = AI_INPUT / AI_GRID;
+  return { scale, horizontal, long, count, starts, cellPx, cells: Math.max(AI_GRID, Math.round(long / cellPx)) };
+}
+
+// Returns { data: Float32Array(tiles × 14 × 14 × AI_DIMS), layout } of patch features for the ROI.
+async function extractPatchFeatures(acquired, rect) {
+  const model = await loadAiModel();
+  const layout = tileLayout(rect);
+  const source = acquired.hires();
+  const tiles = layout.starts.map((start) => {
+    const tile = document.createElement('canvas');
+    tile.width = AI_INPUT;
+    tile.height = AI_INPUT;
+    const size = AI_INPUT / layout.scale; // tile size in high-resolution pixels
+    const sx = rect.x * HIRES_SCALE + (layout.horizontal ? start / layout.scale : 0);
+    const sy = rect.y * HIRES_SCALE + (layout.horizontal ? 0 : start / layout.scale);
+    tile.getContext('2d').drawImage(source, sx, sy, size, size, 0, 0, AI_INPUT, AI_INPUT);
+    return tile;
+  });
+  // One tile per inference: the input shape then always matches the warmed-up shape
+  // (a new batch size would trigger fresh WebGL shader compilation and a wrong first result).
+  const perTile = AI_GRID * AI_GRID * AI_DIMS;
+  const data = new Float32Array(tiles.length * perTile);
+  for (let k = 0; k < tiles.length; k += 1) {
+    const features = tf.tidy(() => {
+      const x = tf.browser.fromPixels(tiles[k]).toFloat().div(127.5).sub(1).expandDims(0);
+      const [mid, deep] = model.predict(x);                         // 28×28×96, 14×14×144
+      const combined = tf.concat([tf.avgPool(mid, 2, 2, 'valid'), deep], 3); // 14×14×240
+      const local = tf.avgPool(combined, 3, 1, 'same');             // neighbourhood context
+      return tf.gather(local, AI_CHANNELS, 3);
+    });
+    data.set(await features.data(), k * perTile);
+    features.dispose();
+  }
+  return { data, layout };
+}
+
+// Samples are stored quantised to bytes (base64) to keep recipes small.
+const AI_SCALE = 32; // features after ReLU/pooling are small positive numbers
+function encodeSample(features) {
+  const bytes = Uint8Array.from(features.data, (v) => clamp(Math.round(v * AI_SCALE), 0, 255));
+  let binary = '';
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+const decodedSamples = new Map();
+function decodeSample(encoded) {
+  if (!decodedSamples.has(encoded)) {
+    const binary = atob(encoded);
+    decodedSamples.set(encoded, Float32Array.from(binary, (c) => c.charCodeAt(0) / AI_SCALE));
+  }
+  return decodedSamples.get(encoded);
+}
+
+// Per-patch anomaly map: distance from each patch to the nearest good patch within ±1 cell.
+function anomalyMap(features, samples) {
+  const tiles = features.length / (AI_GRID * AI_GRID * AI_DIMS);
+  const map = new Float32Array(tiles * AI_GRID * AI_GRID);
+  for (let tile = 0; tile < tiles; tile += 1) {
+  const base = tile * AI_GRID * AI_GRID;
+  for (let r = 0; r < AI_GRID; r += 1) {
+    for (let c = 0; c < AI_GRID; c += 1) {
+      const at = (base + r * AI_GRID + c) * AI_DIMS;
+      let best = Infinity;
+      for (const sample of samples) {
+        for (let dr = -1; dr <= 1; dr += 1) {
+          for (let dc = -1; dc <= 1; dc += 1) {
+            const rr = r + dr;
+            const cc = c + dc;
+            if (rr < 0 || cc < 0 || rr >= AI_GRID || cc >= AI_GRID) continue;
+            const other = (base + rr * AI_GRID + cc) * AI_DIMS;
+            let d = 0;
+            for (let k = 0; k < AI_DIMS; k += 1) {
+              const diff = features[at + k] - sample[other + k];
+              d += diff * diff;
+              if (d >= best) break;
+            }
+            if (d < best) best = d;
+          }
+        }
+      }
+      map[base + r * AI_GRID + c] = Math.sqrt(best);
+    }
+  }
+  }
+  return map;
+}
+
+// Merges per-tile maps into one grid over the whole ROI (max where tiles overlap).
+function mergeTileMaps(map, layout) {
+  const rows = AI_GRID;
+  const cols = layout.cells;
+  const merged = new Float32Array(rows * cols);
+  layout.starts.forEach((start, tile) => {
+    const shift = Math.round(start / layout.cellPx);
+    for (let r = 0; r < AI_GRID; r += 1) {
+      for (let c = 0; c < AI_GRID; c += 1) {
+        const v = map[tile * AI_GRID * AI_GRID + r * AI_GRID + c];
+        // Along the long axis the tile's cells are offset by its start position.
+        const [gr, gc] = layout.horizontal ? [r, c + shift] : [c, r + shift];
+        const index = gr * cols + Math.min(cols - 1, gc);
+        merged[index] = Math.max(merged[index], v);
+      }
+    }
+  });
+  return { merged, width: layout.horizontal ? cols : rows, height: layout.horizontal ? rows : cols, horizontal: layout.horizontal, cols };
+}
+
+// Scale reference: leave-one-out scores of the good samples. A sample scoring more than
+// 2.5 × the median is a gross outlier (e.g. a bad part shown by mistake) and is excluded;
+// limit = the larger of mean + 3σ and 1.15 × the maximum of the remaining scores.
+function learnThreshold(encodedSamples) {
+  const samples = encodedSamples.map(decodeSample);
+  const scores = samples.map((sample, i) => Math.max(...anomalyMap(sample, samples.filter((_, j) => j !== i))));
+  const sorted = [...scores].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const outliers = scores.map((v, i) => (v > 2.5 * median ? i : -1)).filter((i) => i >= 0);
+  const kept = scores.filter((_, i) => !outliers.includes(i));
+  const { mean, std } = stats(kept);
+  return { limit: Math.max(mean + 3 * std, Math.max(...kept) * 1.15, 1e-6), mean, spread: std, outliers };
+}
+
+function heatmapImage(map, layout, limit) {
+  const grid = mergeTileMaps(map, layout);
+  const canvas = document.createElement('canvas');
+  canvas.width = grid.width;
+  canvas.height = grid.height;
+  const ctx = canvas.getContext('2d');
+  const pixels = ctx.createImageData(grid.width, grid.height);
+  grid.merged.forEach((v, index) => {
+    // merged is stored long-axis-major as rows × cols; transpose for vertical ROIs.
+    const r = Math.floor(index / grid.cols);
+    const c = index % grid.cols;
+    const i = grid.horizontal ? r * grid.width + c : c * grid.width + r;
+    const t = clamp(v / limit, 0, 2); // 1 = limit of normal
+    const a = clamp((t - 0.6) / 0.6, 0, 1);
+    pixels.data[i * 4] = 255;
+    pixels.data[i * 4 + 1] = Math.round(clamp(1.6 - t, 0, 1) * 200);
+    pixels.data[i * 4 + 2] = 40;
+    pixels.data[i * 4 + 3] = Math.round(a * 190);
+  });
+  ctx.putImageData(pixels, 0, 0);
+  return canvas.toDataURL();
+}
+
 /* ---------- Pixel helpers ---------- */
 
 function roiRect(roi, offset = { dx: 0, dy: 0 }) {
@@ -514,17 +759,27 @@ const RUNNERS = {
       for (const l of lines) s += horizontal ? grey[l * rect.w + i] : grey[i * rect.w + l];
       profile[i] = s / lines.length;
     }
+    // Gradient along the profile; an edge is a run of strong gradient. Its position is the
+    // gradient peak refined to sub-pixel precision with a parabola (standard caliper method).
+    const gradient = new Float32Array(length);
+    for (let i = 1; i < length - 1; i += 1) gradient[i] = Math.abs(profile[i + 1] - profile[i - 1]);
     const edges = [];
     for (let i = 1; i < length - 1; i += 1) {
-      const d = Math.abs(profile[i + 1] - profile[i - 1]);
-      if (d >= step.params.edgeContrast) {
-        const last = edges[edges.length - 1];
-        if (last && i - last.end <= 1) { last.end = i; } else { edges.push({ start: i, end: i }); }
-      }
+      if (gradient[i] < step.params.edgeContrast) continue;
+      const last = edges[edges.length - 1];
+      if (last && i - last.end <= 1) last.end = i; else edges.push({ start: i, end: i });
     }
+    const position = (edge) => {
+      let peak = edge.start;
+      for (let i = edge.start; i <= edge.end; i += 1) if (gradient[i] > gradient[peak]) peak = i;
+      const a = gradient[peak - 1] ?? 0;
+      const c = gradient[peak + 1] ?? 0;
+      const curvature = a - 2 * gradient[peak] + c;
+      return peak + (curvature < 0 ? clamp(0.5 * (a - c) / curvature, -0.5, 0.5) : 0);
+    };
     if (edges.length < 2) return { value: null, fail: `${edges.length} edge found; need 2`, text: 'edges not found' };
-    const first = (edges[0].start + edges[0].end) / 2;
-    const last = (edges[edges.length - 1].start + edges[edges.length - 1].end) / 2;
+    const first = position(edges[0]);
+    const last = position(edges[edges.length - 1]);
     const px = last - first;
     const mm = px / context.pxPerMm;
     return { value: mm, text: `${mm.toFixed(2)} mm (${px.toFixed(1)} px)` };
@@ -556,6 +811,19 @@ const RUNNERS = {
     const breakdown = ranked.slice(0, 3).map(([c, n]) => `${c} ${((n / total) * 100).toFixed(0)}%`).join(', ');
     const label = expected === 'any' || expected === dominant ? `${dominant} · ${share.toFixed(0)}%` : `${dominant} (expected ${expected} ${share.toFixed(0)}%)`;
     return { value: share, label, text: breakdown };
+  },
+
+  async anomaly(image, rect, step, context, acquired) {
+    const samples = step.reference?.samples || [];
+    if (samples.length < AI_MIN_SAMPLES) return { error: `Learn at least ${AI_MIN_SAMPLES} good parts first (${samples.length} learned; 20 recommended).` };
+    const features = await extractPatchFeatures(acquired, rect);
+    const decoded = samples.map(decodeSample);
+    if (decoded.some((sample) => sample.length !== features.data.length)) return { error: 'The ROI size changed since learning. Select Clear and learn the good parts again.' };
+    const map = anomalyMap(features.data, decoded);
+    const { limit } = step.reference.threshold;
+    const value = (Math.max(...map) / limit) * 100;
+    const verdict = value <= step.criteria.max ? 'Normal' : 'Anomaly';
+    return { value, label: `${verdict} · ${value.toFixed(0)}`, text: `anomaly score ${value.toFixed(0)} (limit ${step.criteria.max}) · ${samples.length} good parts learned`, heatmap: heatmapImage(map, features.layout, limit * step.criteria.max / 100) };
   },
 
   async faceId(image, rect, step, context, acquired) {
@@ -599,6 +867,8 @@ const RUNNERS = {
     const tStats = stats(t);
     if (tStats.std < 1) return { error: 'Taught pattern has no detail. Teach it on a textured feature.' };
     let best = { score: -1, x: 0, y: 0 };
+    const cols = region.w - tw + 1;
+    const scores = new Float32Array(cols * (region.h - th + 1)).fill(-1);
     for (let y = 0; y <= region.h - th; y += 1) {
       for (let x = 0; x <= region.w - tw; x += 1) {
         let sum = 0; let sumSq = 0; let cross = 0;
@@ -614,14 +884,25 @@ const RUNNERS = {
         const std = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
         if (std < 1) continue;
         const score = (cross / n - mean * tStats.mean) / (std * tStats.std);
+        scores[y * cols + x] = score;
         if (score > best.score) best = { score, x, y };
       }
     }
+    // Sub-pixel refinement: fit a parabola through the peak and its neighbours in x and y,
+    // so the offset is not limited to the coarse search grid (f pixels).
+    const at = (x, y) => scores[y * cols + x];
+    const refine = (minus, centre, plus) => {
+      const curvature = minus - 2 * centre + plus;
+      return minus > -1 && plus > -1 && curvature < 0 ? clamp(0.5 * (minus - plus) / curvature, -0.5, 0.5) : 0;
+    };
+    const rows = region.h - th + 1;
+    const subX = best.x > 0 && best.x < cols - 1 ? refine(at(best.x - 1, best.y), best.score, at(best.x + 1, best.y)) : 0;
+    const subY = best.y > 0 && best.y < rows - 1 ? refine(at(best.x, best.y - 1), best.score, at(best.x, best.y + 1)) : 0;
     const score = Math.max(0, best.score);
-    const foundX = search.x + best.x * f;
-    const foundY = search.y + best.y * f;
+    const foundX = search.x + (best.x + subX) * f;
+    const foundY = search.y + (best.y + subY) * f;
     const offset = { dx: foundX - ref.x, dy: foundY - ref.y };
-    return { value: score, offset, text: `score ${score.toFixed(2)} · offset ${offset.dx.toFixed(0)}, ${offset.dy.toFixed(0)} px` };
+    return { value: score, offset, text: `score ${score.toFixed(2)} · offset ${offset.dx.toFixed(1)}, ${offset.dy.toFixed(1)} px` };
   },
 };
 
@@ -644,7 +925,7 @@ function judge(step, outcome) {
   if (outcome.fail) return { status: 'FAIL', value: outcome.value, text: outcome.fail };
   const { min, max } = step.criteria;
   const ok = outcome.value >= min && outcome.value <= max;
-  return { status: ok ? 'PASS' : 'FAIL', value: outcome.value, label: outcome.label, text: outcome.text, offset: outcome.offset, faces: outcome.faces };
+  return { status: ok ? 'PASS' : 'FAIL', value: outcome.value, label: outcome.label, text: outcome.text, offset: outcome.offset, faces: outcome.faces, heatmap: outcome.heatmap };
 }
 
 // Short result for display: a name (colour, person) when the tool gives one, else the value.
@@ -837,6 +1118,22 @@ function paramField(step, param) {
   return `<label>${param.label}<input type="number" data-param="${param.key}" value="${value}" min="${param.min}" max="${param.max}" step="${param.step}" /></label>`;
 }
 
+function learnFieldset(step) {
+  const n = step.reference?.samples?.length || 0;
+  const status = n >= AI_MIN_SAMPLES
+    ? `<span class="taught">${n} good part${n === 1 ? '' : 's'} learned${n < 20 ? ' · 20 recommended' : ''}</span>`
+    : `<span class="untaught">${n} of at least ${AI_MIN_SAMPLES} good parts learned</span>`;
+  return `<fieldset><legend>Learn good parts</legend>
+    <div class="teach-row">${status}</div>
+    <div class="learn-actions">
+      <button type="button" class="secondary-button" data-edit="learn">Learn good part</button>
+      <button type="button" class="secondary-button" data-edit="learn10">Learn 10 frames</button>
+      <button type="button" class="danger-link" data-edit="clearLearn" ${n ? '' : 'disabled'}>Clear</button>
+    </div>
+    <small class="field-hint">Show only GOOD parts while learning, placed as they will be in production. <b>Learn 10 frames</b> captures 10 images about 0.4 s apart: change or reposition the good part between frames. Up to ${AI_MAX_SAMPLES} parts.</small>
+  </fieldset>`;
+}
+
 function enrollFieldset(step) {
   const people = step.reference?.people || [];
   return `<fieldset><legend>Enrolled people</legend>
@@ -880,6 +1177,7 @@ function renderEditor() {
     ${tool.params.length ? `<fieldset><legend>Tool parameters</legend><div class="param-fields">${tool.params.map((p) => paramField(step, p)).join('')}</div></fieldset>` : ''}
 
     ${tool.enroll ? enrollFieldset(step) : ''}
+    ${tool.learn ? learnFieldset(step) : ''}
 
     ${tool.teach ? `<fieldset><legend>Reference</legend><div class="teach-row"><span class="${step.reference ? 'taught' : 'untaught'}">${taught}</span><button type="button" class="secondary-button" data-edit="teach">Teach reference</button></div><small class="field-hint">Teaching stores the current ROI contents from the image in the camera view.</small></fieldset>` : ''}
 
@@ -919,6 +1217,9 @@ function renderOverlay() {
     const value = result && (result.label || (result.value !== null && result.value !== undefined)) ? ` · ${escapeHtml(resultLabel(step, result).toUpperCase())}` : '';
     return `<div class="roi ${cls}" data-select="${step.id}" style="left:${box.x * 100}%;top:${box.y * 100}%;width:${box.w * 100}%;height:${box.h * 100}%">
       <span>${String(index + 1).padStart(2, '0')}</span><small>${escapeHtml(step.name.toUpperCase())}${value}</small></div>`;
+  }).join('') + pgm.program.steps.filter((step) => step.enabled && pgm.lastResults[step.id]?.heatmap).map((step) => {
+    const { rect, heatmap } = pgm.lastResults[step.id];
+    return `<img class="heatmap" alt="" src="${heatmap}" style="left:${(rect.x / ANALYSIS_WIDTH) * 100}%;top:${(rect.y / ANALYSIS_HEIGHT) * 100}%;width:${(rect.w / ANALYSIS_WIDTH) * 100}%;height:${(rect.h / ANALYSIS_HEIGHT) * 100}%" />`;
   }).join('') + pgm.program.steps.flatMap((step) => pgm.lastResults[step.id]?.faces || []).map((face) => `
     <div class="face-box ${face.recognised ? 'known' : 'unknown'}" style="left:${face.box.x * 100}%;top:${face.box.y * 100}%;width:${face.box.w * 100}%;height:${face.box.h * 100}%">
       <b>${escapeHtml(face.recognised ? `${face.name} ${face.confidence.toFixed(0)}%` : 'Unknown')}</b></div>`).join('');
@@ -955,13 +1256,14 @@ function addStep(toolKey) {
   const tool = TOOLS[toolKey];
   const count = pgm.program.steps.filter((s) => s.tool === toolKey).length + 1;
   // Face ID looks at the whole view by default; other tools start with a central ROI to be redrawn.
-  const roi = tool.enroll ? { x: 0, y: 0, w: 1, h: 1 } : { x: 0.40, y: 0.35, w: 0.20, h: 0.30 };
+  const roi = tool.enroll ? { x: 0, y: 0, w: 1, h: 1 } : tool.learn ? { x: 0.12, y: 0.22, w: 0.76, h: 0.58 } : { x: 0.40, y: 0.35, w: 0.20, h: 0.30 };
   const step = makeStep(toolKey, `${tool.label} ${count}`, roi);
   pgm.program.steps.push(step);
   pgm.selectedId = step.id;
   markDirty();
   renderEditor();
   if (tool.enroll) preloadFaceModels();
+  if (tool.learn) loadAiModel().catch(() => { /* reported when learning or running */ });
   if (tool.enroll) {
     const nameInput = pe.editor.querySelector('#enrollName');
     nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -994,6 +1296,44 @@ async function teachSelected() {
 }
 
 // Enrolls a face sample for `presetName` (the "+ Sample" button) or the name typed in the field.
+const learnSelected = (frames) => exclusive(() => learnOnce(frames));
+
+async function learnOnce(frames) {
+  const step = stepById(pgm.selectedId);
+  const buttons = pe.editor.querySelectorAll('[data-edit="learn"], [data-edit="learn10"]');
+  buttons.forEach((b) => { b.disabled = true; });
+  try {
+    step.reference ||= {};
+    step.reference.samples ||= [];
+    const room = AI_MAX_SAMPLES - step.reference.samples.length;
+    if (room <= 0) throw new Error(`Already ${AI_MAX_SAMPLES} parts learned. Select Clear to start again.`);
+    const count = Math.min(frames, room);
+    for (let i = 0; i < count; i += 1) {
+      if (i) await new Promise((resolve) => window.setTimeout(resolve, 400));
+      const acquired = await acquireImage();
+      const rect = roiRect(step.roi);
+      if (rect.w < 8 || rect.h < 8) throw new Error('ROI is too small or outside the image.');
+      const encoded = encodeSample(await extractPatchFeatures(acquired, rect));
+      if (step.reference.samples.length && atob(step.reference.samples[0]).length !== atob(encoded).length) {
+        throw new Error('The ROI size changed since the first learned part. Select Clear and learn again.');
+      }
+      step.reference.samples.push(encoded);
+      pe.editor.querySelector('[data-edit="learn10"]').textContent = count > 1 ? `Learning ${i + 1}/${count}…` : 'Learn 10 frames';
+    }
+    if (step.reference.samples.length >= AI_MIN_SAMPLES) step.reference.threshold = learnThreshold(step.reference.samples);
+    step.reference.taughtAt = new Date().toISOString();
+    markDirty();
+    renderEditor();
+    const n = step.reference.samples.length;
+    const outliers = step.reference.threshold?.outliers || [];
+    if (outliers.length) showToast(`Learned ${n} parts, but part${outliers.length > 1 ? 's' : ''} ${outliers.map((i) => i + 1).join(', ')} looked very different from the others and ${outliers.length > 1 ? 'were' : 'was'} ignored for the limit. If a bad part was shown, select Clear and learn again.`, 'error');
+    else showToast(n >= AI_MIN_SAMPLES ? `Learned ${n} good parts. Run the inspection to score new parts.` : `Learned ${n} good part${n === 1 ? '' : 's'}; at least ${AI_MIN_SAMPLES} needed.`);
+  } catch (error) {
+    showToast(`Learning failed: ${error.message}`, 'error');
+    renderEditor();
+  }
+}
+
 const enrollSelected = (presetName) => exclusive(() => enrollOnce(presetName));
 
 async function enrollOnce(presetName) {
@@ -1056,6 +1396,7 @@ function describeChanges(before, after) {
     if (JSON.stringify(old.params) !== JSON.stringify(step.params)) changes.push(`“${step.name}” parameters changed`);
     if (old.fixed !== step.fixed) changes.push(`“${step.name}” ROI ${step.fixed ? 'fixed in image' : 'follows locator'}`);
     if (JSON.stringify(old.reference?.people?.map((p) => p.name)) !== JSON.stringify(step.reference?.people?.map((p) => p.name))) changes.push(`“${step.name}” enrolled people: ${(step.reference?.people || []).map((p) => p.name).join(', ') || 'none'}`);
+    else if ((old.reference?.samples?.length || 0) !== (step.reference?.samples?.length || 0)) changes.push(`“${step.name}” learned good parts ${old.reference?.samples?.length || 0} → ${step.reference?.samples?.length || 0}`);
     else if (old.reference?.taughtAt !== step.reference?.taughtAt) changes.push(`“${step.name}” reference re-taught`);
   });
   before.steps.forEach((step) => { if (!newIds.has(step.id)) changes.push(`removed “${step.name}”`); });
@@ -1244,6 +1585,14 @@ pe.editor.addEventListener('click', (event) => {
   if (action === 'draw') startDrawing();
   if (action === 'teach') teachSelected();
   if (action === 'enroll') enrollSelected(button.dataset.name);
+  if (action === 'learn') learnSelected(1);
+  if (action === 'learn10') learnSelected(10);
+  if (action === 'clearLearn') {
+    step.reference = null;
+    markDirty();
+    renderEditor();
+    showToast(`Learned parts cleared for “${step.name}”.`);
+  }
   if (action === 'unenroll') {
     step.reference.people = step.reference.people.filter((p) => p.name !== button.dataset.name);
     if (step.params.expected === `person:${button.dataset.name}`) step.params.expected = 'anyEnrolled';
@@ -1277,6 +1626,15 @@ pe.role.addEventListener('change', () => {
 
 pe.save.addEventListener('click', saveVersion);
 pe.revert.addEventListener('click', revertChanges);
+const defectButton = document.querySelector('#defectButton');
+defectButton.addEventListener('click', () => {
+  pgm.simDefect = !pgm.simDefect;
+  defectButton.setAttribute('aria-pressed', String(pgm.simDefect));
+  defectButton.textContent = pgm.simDefect ? 'Defect ON' : 'Add defect';
+  updateSimulatedDefect();
+  showToast(pgm.simDefect ? 'Simulated part now has a scratch or stain (moves on every inspection).' : 'Simulated part is good again.');
+});
+
 pe.run.addEventListener('click', () => runProgram());
 pe.inspect.addEventListener('click', () => runProgram());
 
@@ -1291,7 +1649,7 @@ async function initProgram() {
     pgm.program = defaultProgram();
     // Teach the pattern and colour references from the simulated part so the demo runs out of the box.
     try {
-      const { image } = await acquireImage();
+      const { image } = await acquireImage({ ideal: true });
       pgm.program.steps.filter((s) => TOOLS[s.tool].teach).forEach((s) => teachStep(s, image));
     } catch { /* references stay untaught; those steps report ERROR until taught */ }
   }
