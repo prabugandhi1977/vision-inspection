@@ -13,6 +13,8 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: svg('<rect x="1.5" y="8.5" width="3" height="6"/><rect x="6.5" y="4.5" width="3" height="10"/><rect x="11.5" y="1.5" width="3" height="13"/>') },
   { id: 'live', label: 'Live inspection', permission: 'RunInspection', icon: svg('<rect x="1.5" y="3.5" width="13" height="9.5" rx="1.5"/><circle cx="8" cy="8.2" r="2.6"/><path d="M5 3.5l1-1.7h4l1 1.7"/>') },
   { id: 'program', label: 'Inspection program', icon: svg('<path d="M2 3h7M2 8h4M2 13h7"/><circle cx="11.5" cy="3" r="1.5"/><circle cx="8.5" cy="8" r="1.5"/><circle cx="11.5" cy="13" r="1.5"/><path d="M13 3h1M10 8h4M13 13h1"/>') },
+  { id: 'archive', label: 'Image archive', permission: 'ViewReports', icon: svg('<rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><circle cx="5.5" cy="6.3" r="1.3"/><path d="m1.8 12 4-3.8 3 2.6 2.2-1.8 3.2 3"/>') },
+  { id: 'samples', label: 'Reference samples', icon: svg('<rect x="1.5" y="3" width="6" height="10" rx="1"/><rect x="8.5" y="3" width="6" height="10" rx="1"/><path d="m3.2 8 1.2 1.2 2-2.4M10.3 6.8l2.4 2.4M12.7 6.8l-2.4 2.4"/>') },
   { id: 'audit', label: 'Audit log', permission: 'ViewReports', icon: svg('<path d="M4 1.8h6.2L13 4.6v9.6H4Z"/><path d="M6 7.4h5M6 10h5"/>') },
   { id: 'settings', label: 'Settings', icon: svg('<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3"/>') },
 ];
@@ -37,6 +39,7 @@ function showView(id, { scroll = true } = {}) {
   try { localStorage.setItem(VIEW_KEY, id); } catch { /* session only */ }
   if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
   if (id === 'settings' && typeof renderSettings === 'function') renderSettings();
+  document.dispatchEvent(new CustomEvent('viewshown', { detail: id }));
 }
 
 nav.addEventListener('click', (event) => {

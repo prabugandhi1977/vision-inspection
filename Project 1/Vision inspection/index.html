@@ -53,7 +53,7 @@
             </div>
     <section class="status-strip" aria-label="Current production state">
               <div class="running-status"><span class="pulse"></span><strong>RUNNING</strong><span>Component_A</span><b>Recipe v1.2</b></div>
-              <div class="connection-status"><span><i class="connected"></i> Camera <b>Connected</b></span><span><i class="connected"></i> PLC <b>Connected</b></span><span><i class="machine"></i> Machine <b>Auto</b></span></div>
+              <div class="connection-status"><span><i class="connected"></i> Camera <b>Connected</b></span><span><i class="plc-dot" id="plcDot"></i> PLC <b id="plcChip">Not configured</b></span><span><i class="machine"></i> Machine <b>Auto</b></span></div>
               <button class="stop-button" type="button" id="runControl" data-permission="RunInspection"><span>Ⅱ</span> Pause line</button>
             </section>
     <section class="metrics" aria-label="Today at a glance">
@@ -93,6 +93,10 @@
               <div>
                 <h2 id="liveTitle">Live inspection</h2>
                 <p>The current part as the camera sees it, with each step's region and result. Inspect runs the approved program on this image.</p>
+              </div>
+              <div class="plc-control" id="plcControl">
+                <label class="switch"><input type="checkbox" id="plcAuto" data-permission="RunInspection" /><span>Inspect on PLC trigger</span></label>
+                <span class="plc-status" id="plcStatusText">PLC not configured</span>
               </div>
             </div>
     <section class="work-grid">
@@ -156,6 +160,7 @@
                   <div class="check"><span class="check-number">04</span><div><strong>Surface finish</strong><small>No anomaly detected</small></div><b>PASS</b><i>✓</i></div>
                 </div>
                 <button class="view-detail" type="button" id="detailsButton">View inspection details <span>→</span></button>
+                <div class="pinned-sample" id="pinnedSample" hidden></div>
               </aside>
             </section>
           </section>
@@ -209,6 +214,62 @@
             </section>
           </section>
 
+          <section class="view" id="view-archive" aria-labelledby="archiveTitle" hidden>
+            <div class="view-head">
+              <div>
+                <h2 id="archiveTitle">Image archive</h2>
+                <p>Stored inspection images with their step results, kept per result for the retention set in Settings.</p>
+              </div>
+              <span class="storage-pill" id="archiveStorage">Storage: checking…</span>
+            </div>
+            <div class="card archive-card">
+              <form class="archive-filters" id="archiveFilters">
+                <label>Result<select id="archiveResult"><option value="">All results</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="ERROR">ERROR</option></select></label>
+                <label>Date<input type="date" id="archiveDate" /></label>
+                <label>Part ID<input type="search" id="archivePart" placeholder="e.g. A0012" /></label>
+                <button class="secondary-button" type="submit">Show</button>
+              </form>
+              <div class="archive-grid" id="archiveGrid"></div>
+            </div>
+          </section>
+
+          <section class="view" id="view-samples" aria-labelledby="samplesTitle" hidden>
+            <div class="view-head">
+              <div>
+                <h2 id="samplesTitle">Reference samples</h2>
+                <p>Golden (Good) and defect examples to compare against the part on the line. Pin one to show it next to Live inspection.</p>
+              </div>
+              <span class="storage-pill" id="samplesStorage">Storage: checking…</span>
+            </div>
+            <div class="grid-2 samples-layout">
+              <div class="card samples-card">
+                <div class="card-head"><h3>Library</h3>
+                  <div class="segmented" id="sampleFilter" role="group" aria-label="Show samples">
+                    <button type="button" data-filter="" aria-pressed="true">All</button><button type="button" data-filter="Good" aria-pressed="false">Good</button><button type="button" data-filter="Defect" aria-pressed="false">Defect</button>
+                  </div>
+                </div>
+                <form class="sample-form" id="sampleForm">
+                  <label>Type<select id="sampleLabel"><option value="Good">Good (golden sample)</option><option value="Defect">Defect</option></select></label>
+                  <label id="defectTypeField" hidden>Defect<select id="sampleDefect"><option>Scratch</option><option>Dent</option><option>Stain</option><option>Missing feature</option><option>Wrong colour</option><option>Wrong orientation</option><option>Other</option></select></label>
+                  <label class="wide">Note<input id="sampleNote" maxlength="200" placeholder="What to look for" /></label>
+                  <button class="primary-button" type="submit" data-permission="ModifyRecipe">Save current camera frame</button>
+                </form>
+                <div class="sample-grid" id="sampleGrid"></div>
+              </div>
+              <div class="card compare-card" id="compareCard">
+                <div class="card-head"><h3>Compare with the line</h3><button class="secondary-button" type="button" id="refreshLive">Refresh live frame</button></div>
+                <div class="compare-pair">
+                  <figure><img id="compareSample" alt="Selected reference sample" /><figcaption id="compareSampleCaption">Select a sample</figcaption></figure>
+                  <figure><img id="compareLive" alt="Current camera frame" /><figcaption>Current camera frame</figcaption></figure>
+                </div>
+                <div class="compare-actions">
+                  <button class="secondary-button" type="button" id="pinSample" disabled>Pin to Live inspection</button>
+                  <button class="secondary-button danger" type="button" id="deleteSample" data-permission="ModifyRecipe" disabled>Delete sample</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="view" id="view-audit" aria-labelledby="auditTitle" hidden>
             <div class="view-head">
               <div>
@@ -240,7 +301,7 @@
             </div>
           </section>
         </main>
-        <footer class="app-foot">VisionForge — a browser prototype of a vision inspection station. Sign-in and data are stored in this browser; production needs the planned PLC, camera, database and server-side sign-in integration.</footer>
+        <footer class="app-foot">VisionForge — a browser prototype of a vision inspection station. The PLC trigger, smart cameras and image storage run through the gateway on the station PC; sign-in and recipes are stored in this browser.</footer>
       </div>
     </div>
 
@@ -331,11 +392,23 @@
       </section>
     </div>
 
+    <div class="modal" id="imageDialog" role="dialog" aria-modal="true" aria-labelledby="imageDialogTitle" hidden>
+      <div class="modal__backdrop" data-close-modal></div>
+      <section class="modal__panel image-panel">
+        <header>
+          <div><span class="eyebrow">STORED INSPECTION</span><h2 id="imageDialogTitle">Inspection image</h2></div>
+          <button class="dialog-close" type="button" data-close-modal aria-label="Close">×</button>
+        </header>
+        <div id="imageDialogBody"></div>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
     <script src="auth.js"></script>
     <script src="views.js"></script>
     <script src="camera-sources.js"></script>
+    <script src="station.js"></script>
     <script src="inspection.js"></script>
   </body>
 </html>

@@ -979,15 +979,16 @@ const runProgram = (options) => {
   return exclusive(() => runProgramOnce(options));
 };
 
-async function runProgramOnce({ record = true } = {}) {
+async function runProgramOnce({ record = true, plc = null } = {}) {
   const started = performance.now();
   const results = {};
   let overall = 'PASS';
   let source = '—';
+  let acquired = null;
   const enabled = pgm.program.steps.filter((step) => step.enabled);
   try {
     if (!enabled.length) throw new Error('No enabled inspection steps in this recipe.');
-    const acquired = await acquireImage();
+    acquired = await acquireImage();
     source = acquired.source;
     let offset = { dx: 0, dy: 0 };
     let lostPart = null;
@@ -1040,8 +1041,12 @@ async function runProgramOnce({ record = true } = {}) {
   renderOverlay();
   renderStepList();
   renderEditor();
-  showOverall(overall, results, cycle, source, record);
-  return { overall, results, cycle };
+  const partId = showOverall(overall, results, cycle, source, record);
+  // Store the image and its results (station PC via the gateway, or this browser); never blocks the result.
+  if (record && acquired && typeof saveInspectionImage === 'function') {
+    saveInspectionImage({ acquired, overall, results, cycle, partId, source, plc }).catch(() => {});
+  }
+  return { overall, results, cycle, partId };
 }
 
 function showOverall(overall, results, cycle, source, record) {
@@ -1049,7 +1054,7 @@ function showOverall(overall, results, cycle, source, record) {
   pe.overall.className = `result-indicator ${cls}`;
   pe.overall.querySelector('strong').innerHTML = `<i></i> ${overall}`;
   els.cameraMode.textContent = `${source} · ${overall}`;
-  if (!record) return;
+  if (!record) return null;
 
   const id = padPart(++state.part);
   state.total += 1;
@@ -1089,6 +1094,7 @@ function showOverall(overall, results, cycle, source, record) {
   const drifting = enabledSteps.filter((step) => results[step.id]?.drift).map((step) => step.name);
   const why = (problems.length ? ` · ${problems.join(' · ')}${skipped ? ` · ${skipped} skipped` : ''}` : '') + (drifting.length ? ` · ⚠ drift: ${drifting.join(', ')}` : '');
   showToast(`${id}: ${overall} · ${passed}/${enabledSteps.length} steps passed${why}`, overall === 'PASS' ? '' : 'error');
+  return id;
 }
 
 /* ---------- Rendering ---------- */
