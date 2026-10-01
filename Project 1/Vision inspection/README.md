@@ -11,10 +11,12 @@ The console follows the Expense360 layout and design system: a left sidebar with
 | Overview | Line status, output / pass rate / rejects / cycle time, recent results, defect distribution |
 | Live inspection | Camera view with ROIs, Inspect / capture / simulate, result detail |
 | Inspection program | Tool library, steps, step editor, learn limits, save and approval |
+| Image archive | Stored inspection images with step results, filtered by result, date and part |
+| Reference samples | Good / Defect reference images, compare with the live part, pin to Live inspection |
 | Audit log | Sign-ins, recipe submissions and approvals, camera, user and settings changes |
 | Settings | My account; for administrators users, roles and station settings |
 
-Views are linkable (`#overview`, `#live`, `#program`, `#audit`, `#settings`), the last view and theme are remembered, and tabs follow the signed-in role's permissions. **Draw ROI on image** switches to Live inspection and returns to the program when the ROI is drawn.
+Views are linkable (`#overview`, `#live`, `#program`, `#archive`, `#samples`, `#audit`, `#settings`), the last view and theme are remembered, and tabs follow the signed-in role's permissions. **Draw ROI on image** switches to Live inspection and returns to the program when the ROI is drawn.
 
 ## Run locally
 
@@ -102,6 +104,16 @@ This sign-in runs entirely in the browser (users, salted SHA-256 password hashes
 **Learn limits** (needs *ModifyRecipe*) runs the program on the configured number of good parts (default 20) and learns each measuring tool's normal spread. It proposes pass limits at mean ± 4σ — one-sided where only one direction is bad (pattern score and colour match: minimum only; surface contrast: maximum only; blob count: whole numbers) — never tighter than the tool's resolution. Proposals are reviewed in a table and applied as a draft change that is saved or approved like any other.
 
 After learning, **drift** is flagged when two consecutive inspections are more than 2.5σ from the learned mean on the same side while still passing (an SPC run rule), shown as *PASS ⚠* on the step and in the result message. In testing: 40 normal parts gave no drift alarms; a 4σ process shift was flagged on the second inspection. AI anomaly and Face ID steps learn on their own and are not included.
+
+## PLC trigger, image archive and reference samples
+
+These run through the station gateway ([`camera-gateway/`](camera-gateway/README.md)):
+
+- **PLC trigger (Modbus TCP):** switch on **Inspect on PLC trigger** in Live inspection. Each PLC trigger runs the program and the gateway writes PASS / FAIL / ERROR, a result code and Complete back to the PLC (Ready, Busy and Heartbeat included). No station online, a timeout or a withdrawn trigger always gives ERROR. The Overview shows the real PLC state. `plc-simulator.js` simulates a PLC for testing.
+- **Image archive:** each inspection image is stored with its step results, recipe, operator and PLC part number (all inspections, FAIL/ERROR only, or off — Settings), in date and result folders on the station PC, with the PASS / FAIL retention from Settings. The **Image archive** view filters by result, date and part and shows each image with its step regions and results.
+- **Reference samples:** save the current camera frame (or an archived image) as a **Good** golden sample or a **Defect** example with its type and a note, compare it side by side with the live part, and pin it next to Live inspection. Adding and deleting samples needs *ModifyRecipe* and is audited.
+
+Without a gateway (e.g. the online demo) images and samples are kept in this browser (newest 300 images) so the workflow can still be tried; the PLC trigger needs the gateway.
 
 ## Camera sources: phone, smart and IP cameras
 

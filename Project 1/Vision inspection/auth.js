@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS = {
   learnSamples: 20,
   retentionPassDays: 7,
   retentionFailDays: 90,
+  saveImages: 'all',
 };
 
 const SETTING_FIELDS = [
@@ -41,7 +42,8 @@ const SETTING_FIELDS = [
   { key: 'sessionTimeoutMin', label: 'Sign out after inactivity (minutes)', type: 'number', min: 1, max: 480 },
   { key: 'learnSamples', label: 'Good parts used by Learn limits', type: 'number', min: 5, max: 100 },
   { key: 'retentionPassDays', label: 'Keep PASS images (days)', type: 'number', min: 1, max: 3650 },
-  { key: 'retentionFailDays', label: 'Keep FAIL images (days)', type: 'number', min: 1, max: 3650 },
+  { key: 'retentionFailDays', label: 'Keep FAIL / ERROR images (days)', type: 'number', min: 1, max: 3650 },
+  { key: 'saveImages', label: 'Save inspection images', type: 'select', options: [['all', 'All inspections'], ['fail', 'FAIL and ERROR only'], ['off', 'Off']] },
 ];
 
 const DEMO_USERS = [
@@ -342,7 +344,9 @@ function stationTab() {
   const s = auth.settings;
   return `<div class="settings-section">
     <form class="settings-form grid" data-form="settings">
-      ${SETTING_FIELDS.map((f) => `<label>${f.label}<input name="${f.key}" type="${f.type}" value="${esc(s[f.key])}" ${f.type === 'number' ? `min="${f.min}" max="${f.max}" step="1"` : 'maxlength="40"'} required /></label>`).join('')}
+      ${SETTING_FIELDS.map((f) => (f.type === 'select'
+        ? `<label>${f.label}<select name="${f.key}">${f.options.map(([v, l]) => `<option value="${v}" ${String(s[f.key]) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`
+        : `<label>${f.label}<input name="${f.key}" type="${f.type}" value="${esc(s[f.key])}" ${f.type === 'number' ? `min="${f.min}" max="${f.max}" step="1"` : 'maxlength="40"'} required /></label>`)).join('')}
       <label class="wide">Reason for change<input name="reason" required placeholder="Required for the audit trail" /></label>
       <button class="primary-button" type="submit">Save settings</button>
     </form>
@@ -424,13 +428,14 @@ authEls.settingsBody.addEventListener('submit', async (event) => {
       if (!auth.can('ManageSettings')) throw new Error('Requires the ManageSettings permission.');
       const before = auth.settings;
       const next = { ...before };
-      SETTING_FIELDS.forEach((f) => { next[f.key] = f.type === 'number' ? Math.min(f.max, Math.max(f.min, Number(data[f.key]))) : data[f.key].trim(); });
+      SETTING_FIELDS.forEach((f) => { next[f.key] = f.type === 'number' ? Math.min(f.max, Math.max(f.min, Number(data[f.key]))) : f.type === 'select' ? data[f.key] : data[f.key].trim(); });
       const changed = SETTING_FIELDS.filter((f) => String(before[f.key]) !== String(next[f.key]));
       if (!changed.length) { showToast('No settings changed.'); return; }
       auth.store.settings = next;
       saveAuthStore();
       changed.forEach((f) => auth.audit('ManageSettings', f.label, before[f.key], next[f.key], data.reason.trim()));
       applyPermissions();
+      if (typeof pushRetention === 'function') pushRetention().catch((error) => showToast(`Retention not applied on the station: ${error.message}`, 'error'));
       renderSettings();
       showToast(`${changed.length} setting${changed.length === 1 ? '' : 's'} saved.`);
     }

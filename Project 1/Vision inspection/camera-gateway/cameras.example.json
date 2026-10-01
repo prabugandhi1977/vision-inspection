@@ -49,5 +49,75 @@
       "type": "folder",
       "path": "C:/VisionImages/station1"
     }
-  ]
+  ],
+  "plc": {
+    "enabled": false,
+    "_comment": "Set enabled to true and point host/port at the PLC (or at plc-simulator.js on 127.0.0.1:1502).",
+    "host": "192.168.0.10",
+    "port": 502,
+    "unitId": 1,
+    "pollMs": 20,
+    "resultTimeoutMs": 3000,
+    "heartbeatMs": 1000,
+    "map": {
+      "trigger": {
+        "area": "coil",
+        "address": 0
+      },
+      "reset": {
+        "area": "coil",
+        "address": 1
+      },
+      "ready": {
+        "area": "coil",
+        "address": 10
+      },
+      "busy": {
+        "area": "coil",
+        "address": 11
+      },
+      "complete": {
+        "area": "coil",
+        "address": 12
+      },
+      "pass": {
+        "area": "coil",
+        "address": 13
+      },
+      "fail": {
+        "area": "coil",
+        "address": 14
+      },
+      "error": {
+        "area": "coil",
+        "address": 15
+      },
+      "heartbeat": {
+        "area": "coil",
+        "address": 16
+      },
+      "recipe": {
+        "area": "holding",
+        "address": 0
+      },
+      "partNumber": {
+        "area": "holding",
+        "address": 1
+      },
+      "resultCode": {
+        "area": "holding",
+        "address": 10
+      },
+      "count": {
+        "area": "holding",
+        "address": 11
+      }
+    }
+  },
+  "storage": {
+    "path": "C:/VisionData/station1",
+    "retentionPassDays": 7,
+    "retentionFailDays": 90,
+    "maxImageMB": 10
+  }
 }

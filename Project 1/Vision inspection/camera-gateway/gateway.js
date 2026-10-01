@@ -10,6 +10,9 @@
  *   GET /api/cameras                    configured cameras (no credentials)
  *   GET /api/cameras/:id/frame          latest image (JPEG/PNG/BMP); ?trigger=1 triggers first
  *
+ * Also: PLC inspection trigger over Modbus TCP (plc.js), and image / reference-sample storage
+ * on this PC with retention (storage.js). See README.md for the full API.
+ *
  * Adapters: cognex-native (In-Sight Native Mode over TCP), http-snapshot (Hikvision ISAPI,
  * Axis, Dahua, phone IP-webcam apps; none/basic/digest auth), rtsp (one frame via ffmpeg), and
  * folder (newest image written by a smart camera's FTP/file output).
@@ -24,8 +27,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const { PlcHandshake } = require('./plc');
+const { Storage } = require('./storage');
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const configPath = path.resolve(process.argv[2] || path.join(__dirname, 'cameras.json'));
 if (!fs.existsSync(configPath)) {
   console.error(`Config not found: ${configPath}\nCopy cameras.example.json to cameras.json and edit it.`);
@@ -37,6 +42,14 @@ const HOST = config.host || '127.0.0.1';
 const TIMEOUT_MS = config.timeoutMs || 6000;
 const allowedOrigins = new Set(config.allowedOrigins || []);
 const cameras = new Map((config.cameras || []).map((camera) => [camera.id, camera]));
+const configDir = path.dirname(configPath);
+const log = (message) => console.log(`${new Date().toISOString()} ${message}`);
+
+// Optional PLC handshake (Modbus TCP) and image/sample storage, enabled by config sections.
+const plc = config.plc && config.plc.enabled !== false ? new PlcHandshake(config.plc) : null;
+const storage = config.storage && config.storage.enabled !== false
+  ? new Storage({ ...config.storage, path: path.resolve(configDir, config.storage.path || 'vision-data') })
+  : null;
 
 class GatewayError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -220,7 +233,7 @@ function cors(req, res) {
   if (origin && (allowedOrigins.has(origin) || allowedOrigins.has('*'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Expose-Headers', 'X-Frame-Time, X-Frame-Source');
     // Chrome Private/Local Network Access: a public HTTPS page calling a local service.
@@ -234,14 +247,106 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function readJson(req, limitBytes = 20 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > limitBytes) { reject(new GatewayError(413, 'Request body too large')); req.destroy(); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); }
+      catch { reject(new GatewayError(400, 'Request body is not valid JSON')); }
+    });
+    req.on('error', reject);
+  });
+}
+
+const sendFile = (res, file) => { res.writeHead(200, { 'Content-Type': file.type, 'Cache-Control': 'private, max-age=86400' }); res.end(file.body); };
+const requireStorage = () => { if (!storage) throw new GatewayError(404, 'Storage is not configured on this gateway (add a "storage" section to cameras.json)'); return storage; };
+const requirePlc = () => { if (!plc) throw new GatewayError(404, 'No PLC is configured on this gateway (add a "plc" section to cameras.json)'); return plc; };
+
+/* ---------- PLC events for the station page (Server-Sent Events) ---------- */
+
+const eventClients = new Set();
+function broadcast(event, data) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  eventClients.forEach((client) => client.res.write(payload));
+}
+function updateStationOnline() {
+  if (plc) plc.setStationOnline([...eventClients].some((client) => client.station));
+}
+if (plc) {
+  plc.on('status', (status) => broadcast('status', status));
+  plc.on('trigger', (trigger) => { log(`PLC trigger ${trigger.id} (recipe ${trigger.recipe}, part ${trigger.partNumber})`); broadcast('trigger', trigger); });
+  plc.on('result', (result) => { log(`PLC result ${result.id}: ${result.result}${result.reason ? ` (${result.reason})` : ''} in ${result.cycleMs} ms`); broadcast('result', result); });
+  plc.on('log', log);
+}
+setInterval(() => eventClients.forEach((client) => client.res.write(': keep-alive\n\n')), 15000);
+
+async function handleApi(req, res, url) {
+  const p = url.pathname;
+  const m = (re) => p.match(re);
+  let match;
+
+  if (p === '/api/plc/status' && req.method === 'GET') return sendJson(res, 200, plc ? plc.status() : { configured: false });
+  if (p === '/api/plc/events' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
+    const client = { res, station: url.searchParams.get('station') === '1' };
+    eventClients.add(client);
+    res.write(`event: status\ndata: ${JSON.stringify(plc ? plc.status() : { configured: false })}\n\n`);
+    updateStationOnline();
+    req.on('close', () => { eventClients.delete(client); updateStationOnline(); });
+    return true;
+  }
+  if (p === '/api/plc/result' && req.method === 'POST') {
+    const body = await readJson(req, 64 * 1024);
+    try { return sendJson(res, 200, await requirePlc().submitResult(Number(body.id), String(body.result))); }
+    catch (error) { throw error.status ? error : new GatewayError(409, error.message); }
+  }
+
+  if (p === '/api/storage' && req.method === 'GET') return sendJson(res, 200, storage ? { configured: true, ...(await storage.stats()) } : { configured: false });
+  if (p === '/api/storage/retention' && req.method === 'POST') return sendJson(res, 200, await requireStorage().setRetention(await readJson(req, 64 * 1024)));
+
+  if (p === '/api/images' && req.method === 'POST') {
+    const body = await readJson(req);
+    const record = await requireStorage().saveImage(body.image, body.meta || {});
+    log(`Stored image ${record.id} (${record.bytes} B)`);
+    return sendJson(res, 201, record);
+  }
+  if (p === '/api/images' && req.method === 'GET') {
+    const q = url.searchParams;
+    return sendJson(res, 200, await requireStorage().listImages({ date: q.get('date') || undefined, result: q.get('result') || undefined, part: q.get('part') || undefined, limit: Number(q.get('limit')) || 60 }));
+  }
+  if ((match = m(/^\/api\/images\/([\w-]+)\/file$/)) && req.method === 'GET') return sendFile(res, await requireStorage().imageFile(match[1]));
+  if ((match = m(/^\/api\/images\/([\w-]+)$/)) && req.method === 'GET') return sendJson(res, 200, await requireStorage().imageMeta(match[1]));
+
+  if (p === '/api/samples' && req.method === 'POST') {
+    const body = await readJson(req);
+    const record = await requireStorage().saveSample(body.image, body.meta || {});
+    log(`Stored sample ${record.id} (${record.label}${record.defectType ? ` · ${record.defectType}` : ''})`);
+    return sendJson(res, 201, record);
+  }
+  if (p === '/api/samples' && req.method === 'GET') return sendJson(res, 200, await requireStorage().listSamples());
+  if ((match = m(/^\/api\/samples\/([\w-]+)\/file$/)) && req.method === 'GET') return sendFile(res, await requireStorage().sampleFile(match[1]));
+  if ((match = m(/^\/api\/samples\/([\w-]+)$/)) && req.method === 'DELETE') return sendJson(res, 200, await requireStorage().deleteSample(match[1]));
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
   const rejected = cors(req, res);
   if (req.method === 'OPTIONS') { res.writeHead(rejected ? 403 : 204); res.end(); return; }
   if (rejected) { sendJson(res, 403, { error: `Origin ${rejected} is not in allowedOrigins` }); return; }
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
-    if (req.method !== 'GET') throw new GatewayError(405, 'Only GET is supported');
-    if (url.pathname === '/api/health') return sendJson(res, 200, { ok: true, version: VERSION, cameras: cameras.size });
+    if (url.pathname.startsWith('/api/plc/') || url.pathname.startsWith('/api/images') || url.pathname.startsWith('/api/samples') || url.pathname.startsWith('/api/storage')) {
+      if (await handleApi(req, res, url) !== false) return;
+      throw new GatewayError(404, 'Not found');
+    }
+    if (req.method !== 'GET') throw new GatewayError(405, 'Only GET is supported here');
+    if (url.pathname === '/api/health') return sendJson(res, 200, { ok: true, version: VERSION, cameras: cameras.size, plc: Boolean(plc), storage: Boolean(storage) });
     if (url.pathname === '/api/cameras') {
       return sendJson(res, 200, [...cameras.values()].map(({ id, name, type, vendor, host, trigger }) => ({
         id, name, type, vendor: vendor || null, host: host || null, canTrigger: type === 'cognex-native' && trigger !== false,
@@ -269,8 +374,8 @@ const server = http.createServer(async (req, res) => {
     throw new GatewayError(404, 'Not found');
   } catch (error) {
     const status = error.status || 500;
-    console.warn(`${new Date().toISOString()} ${req.url} → ${status} ${error.message}`);
-    sendJson(res, status, { error: error.message });
+    console.warn(`${new Date().toISOString()} ${req.method} ${req.url} → ${status} ${error.message}`);
+    if (!res.headersSent) sendJson(res, status, { error: error.message });
   }
 });
 
@@ -278,4 +383,6 @@ server.listen(PORT, HOST, () => {
   console.log(`VisionForge camera gateway ${VERSION} on http://${HOST}:${PORT}`);
   cameras.forEach((camera) => console.log(`  ${camera.id.padEnd(14)} ${camera.type.padEnd(14)} ${camera.name}`));
   console.log(`Allowed page origins: ${[...allowedOrigins].join(', ') || '(none — set allowedOrigins)'}`);
+  if (plc) { plc.start(); console.log(`PLC: Modbus TCP ${config.plc.host}:${config.plc.port || 502} (unit ${config.plc.unitId || 1})`); } else console.log('PLC: not configured');
+  if (storage) { storage.start(log); console.log(`Storage: ${storage.root} (PASS ${storage.retention.retentionPassDays} d, FAIL/ERROR ${storage.retention.retentionFailDays} d)`); } else console.log('Storage: not configured');
 });
