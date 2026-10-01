@@ -1,3 +1,0 @@
-# Keep LF so the Dockerfile, shell commands and scripts behave the same in Linux containers.
-* text=auto eol=lf
-*.png binary
