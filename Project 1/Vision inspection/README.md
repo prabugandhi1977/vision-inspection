@@ -10,11 +10,12 @@ The console follows the Expense360 layout and design system: a left sidebar with
 | --- | --- |
 | Overview | Line status, output / pass rate / rejects / cycle time, recent results, defect distribution |
 | Live inspection | Camera view with ROIs, Inspect / capture / simulate, result detail |
+| AR work guide | Projected work instructions, pick-to-light, camera-verified operations, defect projection and rework, projector calibration |
 | Inspection program | Tool library, steps, step editor, learn limits, save and approval |
 | Audit log | Sign-ins, recipe submissions and approvals, camera, user and settings changes |
 | Settings | My account; for administrators users, roles and station settings |
 
-Views are linkable (`#overview`, `#live`, `#program`, `#audit`, `#settings`), the last view and theme are remembered, and tabs follow the signed-in role's permissions. **Draw ROI on image** switches to Live inspection and returns to the program when the ROI is drawn.
+Views are linkable (`#overview`, `#live`, `#guide`, `#program`, `#audit`, `#settings`), the last view and theme are remembered, and tabs follow the signed-in role's permissions. **Draw ROI on image** switches to Live inspection and returns to the program when the ROI is drawn.
 
 ## Run locally
 
@@ -73,6 +74,29 @@ The **AI anomaly** tool learns what a good part looks like instead of relying on
 - **Scale:** scores are normalised by the leave-one-out spread among the learned good parts, so **100 = the limit of normal variation**. Lower the *Maximum* in Pass criteria to make the tool stricter. A heatmap on the camera view shows where the part differs.
 - **Workflow:** add *AI anomaly*, draw the ROI over the part, then *Learn good part* / *Learn 10 frames* with only good parts (about 20 recommended). A learned part that looks very different from the rest is ignored for the limit and reported.
 - **Demo:** on the simulated part (which now has slight position, lighting, and sensor-noise variation), use **Add defect** to put a scratch or stain on the part. In testing with 20 learned parts, 20/20 good parts passed (scores 43–91) and 20/20 defective parts failed (scores 132–441), at about 85 ms per inspection.
+
+## AR work guide (projected work instructions)
+
+The **AR work guide** view adds projector-based augmented reality to the station, in the style of LightGuide: a projector above the bench lights up where to work, which bin to pick from, and the instruction, and the camera checks each operation before the operator can move on.
+
+- **Guided assembly:** the recipe's operations are shown one at a time. Each has an instruction, a highlight (rectangle or circle) drawn on the workbench, an optional pick bin, and a standard time. The projected panel shows the step, instruction, pick bin, a timer against the standard time, and progress.
+- **Pick-to-light:** bins are placed on the bench in front of the camera view. The bin for the current operation is lit amber.
+- **Error-proofing (camera auto-verify):** each operation names the inspection steps that prove it was done. The camera checks them continuously after a 1.5 s settle time and advances when they pass twice in a row. **Done** (button, Space, Enter or a foot pedal that sends those keys, also in the projector window) is refused while the check fails: the area turns red, the reason is shown (for example *Hole Ø (left): 10.6 mm, needs 9.7–10.3*), and the refusal is counted. SKIPPED or ERROR never counts as done. An operation with no checks is confirmed with Done.
+- **Final inspection:** when the last operation is done, the full program runs and is recorded like any inspection.
+- **Defect projection:** after any recorded FAIL (Live inspection, Run inspection or the guide's final inspection), the failing regions are projected onto the part in red with their measured values; passing regions show as thin green frames. Turn this off with **Project inspection results**.
+- **Rework guidance:** a failed part walks through each failing step with the rework instruction from the recipe. The marked area is checked by the camera until it passes, then the part is inspected again. A re-inspection is recorded as a new inspection in this prototype. An inspection `ERROR` blocks the unit until the cause is fixed and **Inspect again** passes.
+- **Statistics:** units, first-pass yield, reworked units, average unit time, and per-operation average time against the standard and refused Done presses (stored in this browser).
+
+**Governance.** Operations, bins and rework texts are part of the recipe (`program.guide`). Editing them needs *ModifyRecipe*. They are saved or submitted for approval from **Inspection program** with the rest of the recipe, and the audit trail lists each change (for example *AR: “Fit left bushing” verified by Hole Ø (left)*). Deleting an inspection step also removes it from the operations that check it. Running guided assembly needs *RunInspection*.
+
+**Projector setup.**
+1. Mount the projector so it covers the camera's field of view and the bins. Connect it as a second display.
+2. Select **Open projector window**. In Chrome the window opens on the second screen when the browser may use screen placement; otherwise drag it there. Select **Full screen** in it (or press F).
+3. **Calibrate projector** (needs *ConfigureCamera*). Drag the four corner markers in the projector window onto the four corners of the camera's field of view on the bench (place markers at the corners shown in Live inspection). Arrow keys fine-tune the last corner. Check that the projected bin outlines land on the bins, choose the instruction panel position, and select **Save calibration**. The 4-corner homography maps camera-view coordinates onto the bench, including the bin area outside the camera view. Calibration is stored in this browser and recorded in the audit trail.
+
+The console and projector window talk through `BroadcastChannel` (and `postMessage` to the opened window), so both must be open in the same browser on the station PC. Files: `ar-guide.js` (console), `ar-scene.js` (shared drawing and homography), `projector.html` / `projector.js` (projector window).
+
+**Limits of this prototype:** calibration is manual, not camera-detected markers. Hand and tool tracking (for example, detecting a reach into the wrong bin) and PLC, torque-tool or light-curtain inputs are planned integrations. Statistics live in the browser, not in the production database.
 
 ## Sign-in, roles, and settings (demo)
 

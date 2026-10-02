@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VisionForge projector</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+    <style>
+      /* Projected light: black projects nothing, so the page stays black except for the guidance. */
+      html, body { margin: 0; height: 100%; background: #000; color: #fff; overflow: hidden; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+      body.idle { cursor: none; }
+      .bar { position: fixed; top: 12px; right: 12px; display: flex; gap: 8px; opacity: 0; transition: opacity .2s; }
+      body.show-ui .bar, .bar:focus-within { opacity: 1; }
+      button { background: #14232a; border: 1px solid #3c5862; border-radius: 4px; color: #dff3f0; cursor: pointer; font: 600 13px 'IBM Plex Sans', system-ui, sans-serif; padding: 9px 13px; }
+      button.primary { background: #1b6e67; border-color: #4cae9f; color: #fff; }
+      button:focus-visible { outline: 2px solid #4cae9f; outline-offset: 2px; }
+      .calib { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; background: #0b1519ee; border: 1px solid #2c444c; border-radius: 6px; padding: 12px 14px; max-width: calc(100vw - 32px); }
+      .calib p { flex-basis: 100%; margin: 0 0 4px; color: #c9dedb; font-size: 13px; text-align: center; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <canvas id="projection" aria-label="Projected work instructions"></canvas>
+    <div class="bar">
+      <button type="button" id="fullscreenButton">Full screen <small>(F)</small></button>
+      <button type="button" id="doneButton">Done <small>(Space)</small></button>
+    </div>
+    <div class="calib" id="calibPanel" hidden>
+      <p>Drag the four corner markers onto the four corners of the camera’s field of view on the bench (arrow keys nudge the last marker, Shift for larger steps). Check that the bin outlines land on the bins.</p>
+      <button type="button" id="panelButton">Instruction panel: bottom</button>
+      <button type="button" id="resetButton">Reset</button>
+      <button type="button" id="cancelButton">Cancel</button>
+      <button type="button" class="primary" id="saveButton">Save calibration</button>
+    </div>
+    <script src="ar-scene.js"></script>
+    <script src="projector.js"></script>
+  </body>
+</html>

@@ -979,12 +979,16 @@ const runProgram = (options) => {
   return exclusive(() => runProgramOnce(options));
 };
 
-async function runProgramOnce({ record = true } = {}) {
+// `stepIds` runs only those steps (plus any part locator they depend on), as the AR work
+// guide does to verify one operation; `quiet` leaves the program editor and toasts alone.
+async function runProgramOnce({ record = true, stepIds = null, quiet = false } = {}) {
   const started = performance.now();
   const results = {};
   let overall = 'PASS';
   let source = '—';
-  const enabled = pgm.program.steps.filter((step) => step.enabled);
+  const only = stepIds ? new Set(stepIds) : null;
+  const included = (step) => !only || only.has(step.id) || (step.tool === 'pattern' && step.params.locator === 'yes');
+  const enabled = pgm.program.steps.filter((step) => step.enabled && included(step));
   try {
     if (!enabled.length) throw new Error('No enabled inspection steps in this recipe.');
     const acquired = await acquireImage();
@@ -992,6 +996,7 @@ async function runProgramOnce({ record = true } = {}) {
     let offset = { dx: 0, dy: 0 };
     let lostPart = null;
     for (const step of pgm.program.steps) {
+      if (!included(step)) continue;
       if (!step.enabled) { results[step.id] = { status: 'SKIPPED', value: null, text: 'Step disabled' }; continue; }
       if (lostPart && !step.fixed) { results[step.id] = { status: 'SKIPPED', value: null, text: `Part not located by “${lostPart}”` }; continue; }
       const t0 = performance.now();
@@ -1033,14 +1038,17 @@ async function runProgramOnce({ record = true } = {}) {
     if (lostPart && overall === 'PASS') overall = 'FAIL';
   } catch (error) {
     overall = 'ERROR';
-    showToast(`Inspection error: ${error.message}`, 'error');
+    if (!quiet) showToast(`Inspection error: ${error.message}`, 'error');
   }
   const cycle = (performance.now() - started) / 1000;
   pgm.lastResults = results;
   renderOverlay();
-  renderStepList();
-  renderEditor();
-  showOverall(overall, results, cycle, source, record);
+  if (!quiet) {
+    renderStepList();
+    renderEditor();
+  }
+  if (!quiet) showOverall(overall, results, cycle, source, record);
+  document.dispatchEvent(new CustomEvent('visionforge:inspection', { detail: { overall, results, cycle, record, partial: Boolean(only), partId: els.partId.textContent } }));
   return { overall, results, cycle };
 }
 
@@ -1287,6 +1295,7 @@ function renderAll() {
   renderEditor();
   renderOverlay();
   renderAudit();
+  renderGuide();
 }
 
 /* ---------- Editing ---------- */
@@ -1448,6 +1457,7 @@ function describeChanges(before, after) {
   });
   before.steps.forEach((step) => { if (!newIds.has(step.id)) changes.push(`removed “${step.name}”`); });
   if (before.steps.map((s) => s.id).filter((id) => newIds.has(id)).join() !== after.steps.map((s) => s.id).filter((id) => oldSteps.has(id)).join()) changes.push('step order changed');
+  changes.push(...describeGuideChanges(before, after));
   return changes;
 }
 
@@ -1649,6 +1659,7 @@ pe.library.addEventListener('click', (event) => {
 function removeStep(id) {
   const index = pgm.program.steps.findIndex((s) => s.id === id);
   const [removed] = pgm.program.steps.splice(index, 1);
+  forgetGuideStep(id);
   if (pgm.selectedId === id) pgm.selectedId = (pgm.program.steps[index] || pgm.program.steps[index - 1])?.id ?? null;
   markDirty();
   renderEditor();
@@ -1892,9 +1903,13 @@ async function initProgram() {
       pgm.program.steps.filter((s) => TOOLS[s.tool].teach).forEach((s) => teachStep(s, image));
     } catch { /* references stay untaught; those steps report ERROR until taught */ }
   }
+  // Recipes saved before the AR work guide get its default work instructions.
+  ensureGuide(pgm.program);
+  ensureGuide(pgm.pending?.program);
   pgm.approved = clone(pgm.program);
   pgm.selectedId = pgm.program.steps[0]?.id ?? null;
   auth.setAuditSink(addAudit);
+  initGuide();
   renderAll();
   preloadFaceModels();
 }

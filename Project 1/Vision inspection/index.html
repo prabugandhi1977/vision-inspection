@@ -160,6 +160,35 @@
             </section>
           </section>
 
+          <section class="view" id="view-guide" aria-labelledby="guideTitle" hidden>
+            <div class="view-head">
+              <div>
+                <h2 id="guideTitle">AR work guide</h2>
+                <p>Projected, step-by-step work instructions with pick-to-light. The camera checks each operation before the operator can move on; a failed part gets its defects projected onto it and guided rework.</p>
+              </div>
+              <div class="ar-head-actions">
+                <span class="ar-projector-pill" id="arProjectorState"><i></i><span>Projector not connected</span></span>
+                <button class="secondary-button" type="button" id="arOpenProjector">Open projector window</button>
+                <button class="secondary-button" type="button" id="arCalibrate" data-permission="ConfigureCamera">Calibrate projector</button>
+              </div>
+            </div>
+            <section class="ar-run-grid">
+              <article class="card ar-stage-card">
+                <div class="card-heading">
+                  <div><span class="eyebrow">WORKBENCH · CAMERA VIEW AND PICK BINS</span><h2>What the projector shows</h2></div>
+                  <label class="ar-toggle"><input type="checkbox" id="arProjectResults" checked /> Project inspection results</label>
+                </div>
+                <div class="ar-stage" id="arStage">
+                  <canvas id="arCanvas" aria-label="Workbench preview: camera view, highlighted work area and pick bins"></canvas>
+                  <div class="draw-hint" id="arDrawHint" hidden></div>
+                </div>
+              </article>
+              <aside class="card ar-operator-card" id="arOperator" aria-live="polite"></aside>
+            </section>
+            <section class="card ar-edit-card" id="arEditor" aria-label="Work instructions"></section>
+            <section class="card ar-stats-card" id="arStats" aria-label="Guided assembly statistics"></section>
+          </section>
+
           <section class="view" id="view-program" aria-labelledby="programViewTitle" hidden>
             <div class="view-head">
               <div>
@@ -336,6 +365,8 @@
     <script src="auth.js"></script>
     <script src="views.js"></script>
     <script src="camera-sources.js"></script>
+    <script src="ar-scene.js"></script>
+    <script src="ar-guide.js"></script>
     <script src="inspection.js"></script>
   </body>
 </html>

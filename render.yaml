@@ -1,0 +1,13 @@
+# Render Blueprint: deploys the VisionForge console as a static site (no build step).
+# The root index.html redirects to "Project 1/Vision inspection/".
+services:
+  - type: web
+    name: visionforge
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
