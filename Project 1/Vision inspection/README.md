@@ -10,7 +10,7 @@ The console follows the Expense360 layout and design system: a left sidebar with
 | --- | --- |
 | Overview | Line status, output / pass rate / rejects / cycle time, recent results, defect distribution |
 | Live inspection | Camera view with ROIs, Inspect / capture / simulate, result detail |
-| AR work guide | Projected work instructions, pick-to-light, camera-verified operations, defect projection and rework, projector calibration |
+| AR work guide | Projected work instructions, pick-to-light, camera-verified operations, defect projection and rework, projector calibration, VR training records |
 | Inspection program | Tool library, steps, step editor, learn limits, save and approval |
 | Audit log | Sign-ins, recipe submissions and approvals, camera, user and settings changes |
 | Settings | My account; for administrators users, roles and station settings |
@@ -97,6 +97,23 @@ The **AR work guide** view adds projector-based augmented reality to the station
 The console and projector window talk through `BroadcastChannel` (and `postMessage` to the opened window), so both must be open in the same browser on the station PC. Files: `ar-guide.js` (console), `ar-scene.js` (shared drawing and homography), `projector.html` / `projector.js` (projector window).
 
 **Limits of this prototype:** calibration is manual, not camera-detected markers. Hand and tool tracking (for example, detecting a reach into the wrong bin) and PLC, torque-tool or light-curtain inputs are planned integrations. Statistics live in the browser, not in the production database.
+
+## VR training (virtual workstation)
+
+**VR training** (`vr-training.html`, opened from the AR work guide view) is a virtual copy of the assembly workstation. Trainees practise the recipe's work instructions before working on the line. It runs in a VR headset browser through WebXR (Meta Quest, Pico, Apple Vision Pro) and on a normal screen with the mouse.
+
+- **Built from the recipe:** the bench, fixture plate, pick bins, highlights, standard times and rework texts come from the approved recipe's work instructions (`program.guide`). A change to the work instructions changes the training.
+- **Interaction:** point at a bin and pull the trigger (or pinch, or click) to pick a part, then point at the marked area on the fixture to place it. Operations without a bin are tool steps: hold the trigger or mouse button on the area until the ring completes. The station monitor in the scene shows the step, instruction, pick bin, timer against the standard time, and errors. Controllers vibrate on mistakes.
+- **Modes:** *Guided* shows the projector highlights and pick-to-light, as at the real station. *Assessment* hides them, so the trainee must know the bin and position. An assessment passes with no errors within 1.5× the total standard time.
+- **Mistakes counted:** wrong bin, wrong position, placing without picking, and picking for a tool step.
+- **Rework scenario (optional):** the session ends with a simulated inspection FAIL on a random step. The trainee follows that step's rework guidance on the marked area, and re-inspection passes.
+- **Training records:** each session is saved with trainee, recipe version, mode, per-operation times and errors, and result. The AR work guide view lists them under **Training records**.
+
+The trainee is the user signed in to the console in the same browser. Three.js r169 (MIT) is bundled in `vendor/three/` so training works without internet access.
+
+**Limits of this prototype:**
+- Recipes and records live in each browser's storage. A headset's browser trains on the recipe stored in that browser: sign in to the console there first, and recipe changes made on the station PC do not reach the headset until the planned server database exists.
+- Parts are simplified blocks sized to each operation's target area, not CAD models. Interaction is point-and-trigger, not physical grabbing.
 
 ## Sign-in, roles, and settings (demo)
 

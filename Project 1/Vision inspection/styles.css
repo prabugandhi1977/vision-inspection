@@ -613,3 +613,4 @@ body.signed-out .app-shell { filter: none; visibility: hidden; }
 .ar-op-list .step-select { min-width:0; }
 .ar-bin { align-items:center; }
 .ar-bin .secondary-button { font-size:11px; min-height:30px; padding:0 9px; }
+.ar-vr-link { align-items:center; display:inline-flex; text-decoration:none; }
