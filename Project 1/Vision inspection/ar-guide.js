@@ -20,6 +20,7 @@
 const PROJECTOR_KEY = 'visionforge.projector';
 const GUIDE_STATS_KEY = 'visionforge.guide.stats';
 const GUIDE_PREFS_KEY = 'visionforge.guide.prefs';
+const TRAINING_KEY = 'visionforge.training.v1';
 const AR_PASSES_NEEDED = 2;  // consecutive passing camera checks before an operation counts as done
 const AR_SETTLE_MS = 1500;   // let the operator's hands leave the area before checking
 const AR_TICK_MS = 600;
@@ -52,6 +53,7 @@ const ge = {
   operator: document.querySelector('#arOperator'),
   editor: document.querySelector('#arEditor'),
   stats: document.querySelector('#arStats'),
+  training: document.querySelector('#arTraining'),
   projectorState: document.querySelector('#arProjectorState'),
   openProjector: document.querySelector('#arOpenProjector'),
   calibrate: document.querySelector('#arCalibrate'),
@@ -865,6 +867,19 @@ function renderStats() {
     </table></div>`;
 }
 
+// Sessions saved by the VR trainer (vr-training.html) in this browser, newest first.
+function renderTraining() {
+  let records = [];
+  try { records = JSON.parse(localStorage.getItem(TRAINING_KEY) || '[]'); } catch { /* none */ }
+  const rows = records.slice(-20).reverse();
+  ge.training.innerHTML = `
+    <div class="card-heading"><div><span class="eyebrow">VR TRAINING · THIS BROWSER</span><h2>Training records</h2></div><a class="text-button" href="vr-training.html" target="_blank" rel="noopener">Open VR training →</a></div>
+    ${rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>DATE</th><th>TRAINEE</th><th>RECIPE</th><th>MODE</th><th>TIME</th><th>ERRORS</th><th>RESULT</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td>${escapeHtml(new Date(r.at).toLocaleString('en-GB'))}</td><td><strong>${escapeHtml(r.user)}</strong></td><td>${escapeHtml(r.product)} v${escapeHtml(r.version)}</td><td>${r.mode === 'assessment' ? 'Assessment' : 'Guided'}${r.rework ? ' + rework' : ''}</td><td>${seconds(r.totalMs)}</td><td>${r.errors}</td><td class="${r.passed ? '' : 'ar-over'}">${r.mode === 'assessment' ? (r.passed ? 'Passed' : 'Not passed') : 'Completed'}</td></tr>`).join('')}</tbody>
+    </table></div>` : '<p class="ar-empty">No training sessions yet. Trainees practise the recipe’s work instructions on a virtual copy of this station, in a VR headset or on screen.</p>'}`;
+}
+
 function renderGuide() {
   if (!gd.ready) return;
   ensureGuide(pgm.program);
@@ -873,6 +888,7 @@ function renderGuide() {
   renderOperator();
   renderGuideEditor();
   renderStats();
+  renderTraining();
   renderProjectorState();
   pushScene();
 }
@@ -1019,6 +1035,9 @@ document.addEventListener('visionforge:inspection', (event) => {
   renderOperator();
   pushScene();
 });
+
+// The VR trainer runs in another tab; show its records as soon as it saves one.
+window.addEventListener('storage', (event) => { if (gd.ready && event.key === TRAINING_KEY) renderTraining(); });
 
 auth.onChange(() => {
   if (!gd.ready) return;
